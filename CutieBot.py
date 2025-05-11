@@ -25,20 +25,20 @@ async def setup_commands():
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user.name}')
-    await setup_commands()
+    print(f"Logged in as {bot.user} ({bot.user.id})")
+
+    await setup_commands()  # This must run AFTER bot is ready
 
     try:
         if TEST_GUILD_ID:
-            guild = discord.Object(id=TEST_GUILD_ID)
-            synced = await bot.tree.sync(guild=guild)
+            synced = await bot.tree.sync(guild=discord.Object(id=TEST_GUILD_ID))
             print(f"Synced {len(synced)} command(s) to test guild.")
         else:
             synced = await bot.tree.sync()
             print(f"Synced {len(synced)} global command(s).")
     except Exception as e:
-        print(f"Failed to sync commands: {e}")
-
+        print(f"Command sync failed: {e}")
+        
     # Start background tasks
     asyncio.create_task(check_birthdays(bot))
     asyncio.create_task(check_giveaways(bot))
