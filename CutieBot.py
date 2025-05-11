@@ -71,7 +71,7 @@ async def on_ready():
     asyncio.create_task(check_reminders(bot))
     asyncio.create_task(check_polls(bot))
     try:
-        synced = await bot.tree.sync()
+        synced = bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
