@@ -13,7 +13,7 @@ with open("config.json", mode="r") as config_file:
     config = json.load(config_file)
 
 load_dotenv()
-BOT_TOKEN = config[os.getenv('BOT_TOKEN')]  #Your Bot Token from https://discord.dev
+BOT_TOKEN = config[os.getenv('DISCORD_TOKEN')] 
 GUILD_ID = config["guild_id"] #Your Server ID aka Guild ID  
 CATEGORY_ID = config["category_id"]
 
