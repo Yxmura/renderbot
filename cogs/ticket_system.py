@@ -58,16 +58,34 @@ class MyView(discord.ui.View):
         placeholder="Choose a Ticket option",
         options=[
             discord.SelectOption(
-                label="Support1",  #Name of the 1 Select Menu Option
-                description="You will get help here!",  #Description of the 1 Select Menu Option
+                label="General Question",  #Name of the 1 Select Menu Option
+                description="A general question regarding the Discord server or our website",  #Description of the 1 Select Menu Option
                 emoji="❓",        #Emoji of the 1 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
                 value="support1"   #Don't change this value otherwise the code will not work anymore!!!!
             ),
             discord.SelectOption(
-                label="Support2",  #Name of the 2 Select Menu Option
-                description="Ask questions here!", #Description of the 2 Select Menu Option
-                emoji="📛",        #Emoji of the 2 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
+                label="Resource issue",  #Name of the 2 Select Menu Option
+                description="If an asset on our website has wrong or no credit, or if it caused copyright issues", #Description of the 2 Select Menu Option
+                emoji="⚠️",        #Emoji of the 2 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
                 value="support2"   #Don't change this value otherwise the code will not work anymore!!!!
+            ),
+            discord.SelectOption(
+                label="Partner- or sponshorship",  #Name of the 2 Select Menu Option
+                description="Partner with us or sponsor", #Description of the 2 Select Menu Option
+                emoji="💸",        #Emoji of the 2 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
+                value="support3"   #Don't change this value otherwise the code will not work anymore!!!!
+            ),
+            discord.SelectOption(
+                label="Staff application",  #Name of the 2 Select Menu Option
+                description="ONLY IF STAFF APPS ARE OPEN", #Description of the 2 Select Menu Option
+                emoji="🔒",        #Emoji of the 2 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
+                value="support4"   #Don't change this value otherwise the code will not work anymore!!!!
+            ),
+            discord.SelectOption(
+                label="Other",  #Name of the 2 Select Menu Option
+                description="Other things (e.g. bugs)", #Description of the 2 Select Menu Option
+                emoji="💫",        #Emoji of the 2 Option  if you want a Custom Emoji read this  https://github.com/Simoneeeeeeee/Discord-Select-Menu-Ticket-Bot/tree/main#how-to-use-custom-emojis-from-your-discors-server-in-the-select-menu
+                value="support5"   #Don't change this value otherwise the code will not work anymore!!!!
             )
         ]
     )
@@ -82,77 +100,56 @@ class MyView(discord.ui.View):
         existing_ticket = cur.fetchone()
 
         if existing_ticket is None:
-            if "support1" in interaction.data['values']:
-                if interaction.channel.id == TICKET_CHANNEL:
-                    guild = self.bot.get_guild(GUILD_ID)
+            if interaction.channel.id == TICKET_CHANNEL:
+                guild = self.bot.get_guild(GUILD_ID)
 
-                    cur.execute("INSERT INTO ticket (discord_name, discord_id, ticket_created) VALUES (?, ?, ?)", (user_name, user_id, creation_date)) #If the User doesn't have a Ticket open it will insert the User into the Database and create a Ticket
-                    conn.commit()
-                    await asyncio.sleep(1)
-                    cur.execute("SELECT id FROM ticket WHERE discord_id=?", (user_id,)) #Get the Ticket Number from the Database
-                    ticket_number = cur.fetchone()[0]
+                cur.execute("INSERT INTO ticket (discord_name, discord_id, ticket_created) VALUES (?, ?, ?)", (user_name, user_id, creation_date)) #If the User doesn't have a Ticket open it will insert the User into the Database and create a Ticket
+                conn.commit()
+                await asyncio.sleep(1)
+                cur.execute("SELECT id FROM ticket WHERE discord_id=?", (user_id,)) #Get the Ticket Number from the Database
+                ticket_number = cur.fetchone()[0]
 
-                    category = self.bot.get_channel(CATEGORY_ID)
-                    ticket_channel = await guild.create_text_channel(f"ticket-{ticket_number}", category=category,
-                                                                        topic=f"{interaction.user.id}")
-
-                    await ticket_channel.set_permissions(guild.get_role(TEAM_ROLE), send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the Staff Team
-                                                            embed_links=True, attach_files=True, read_message_history=True,
-                                                            external_emojis=True)
-                    await ticket_channel.set_permissions(interaction.user, send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the User
-                                                            embed_links=True, attach_files=True, read_message_history=True,
-                                                            external_emojis=True)
-                    await ticket_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False, view_channel=False) #Set the Permissions for the @everyone role
-                    embed = discord.Embed(description=f'Welcome {interaction.user.mention},\n'
-                                                        'describe your Problem and our Support will help you soon.',   #Ticket Welcome message
-                                                        color=discord.colour.Color.blue())
-                    await ticket_channel.send(embed=embed, view=CloseButton(bot=self.bot))
-                    
-                    channel_id = ticket_channel.id
-                    cur.execute("UPDATE ticket SET ticket_channel = ? WHERE id = ?", (channel_id, ticket_number))
-                    conn.commit()
-
-                    embed = discord.Embed(description=f'📬 Ticket was Created! Look here --> {ticket_channel.mention}',  
-                                                color=discord.colour.Color.green())
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                    await asyncio.sleep(1)
-                    embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.blue())
-                    await interaction.message.edit(embed=embed, view=MyView(bot=self.bot)) #This will reset the SelectMenu in the Ticket Channel
-
-            if "support2" in interaction.data['values']:
-                if interaction.channel.id == TICKET_CHANNEL:
-                    guild = self.bot.get_guild(GUILD_ID)
-
-                    cur.execute("INSERT INTO ticket (discord_name, discord_id, ticket_created) VALUES (?, ?, ?)", (user_name, user_id, creation_date)) #If the User doesn't have a Ticket open it will insert the User into the Database and create a Ticket
-                    conn.commit()
-                    await asyncio.sleep(1)
-                    cur.execute("SELECT id FROM ticket WHERE discord_id=?", (user_id,)) #Get the Ticket Number from the Database
-                    ticket_number = cur.fetchone()[0]
-
-                    category = self.bot.get_channel(CATEGORY_ID)
-                    ticket_channel = await guild.create_text_channel(f"ticket-{ticket_number}", category=category,
+                category = self.bot.get_channel(CATEGORY_ID)
+                ticket_channel = await guild.create_text_channel(f"ticket-{ticket_number}", category=category,
                                                                     topic=f"{interaction.user.id}")
 
-                    await ticket_channel.set_permissions(interaction.user, send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the User
+                await ticket_channel.set_permissions(guild.get_role(TEAM_ROLE), send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the Staff Team
                                                         embed_links=True, attach_files=True, read_message_history=True,
                                                         external_emojis=True)
-                    
-                    await ticket_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False, view_channel=False) #Set the Permissions for the @everyone role
-                    embed = discord.Embed(description=f'Welcome {interaction.user.mention},\n' #Ticket Welcome message
-                                                       'how can i help you?',
-                                                    color=discord.colour.Color.blue())
-                    await ticket_channel.send(embed=embed, view=CloseButton(bot=self.bot))
+                await ticket_channel.set_permissions(interaction.user, send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the User
+                                                        embed_links=True, attach_files=True, read_message_history=True,
+                                                        external_emojis=True)
+                await ticket_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False, view_channel=False) #Set the Permissions for the @everyone role
+                
+                selected_value = interaction.data["values"][0]
+                selected_label = next(
+                    (option.label for option in select.options if option.value == selected_value),
+                    "Unknown"
+                )
 
-                    channel_id = ticket_channel.id
-                    cur.execute("UPDATE ticket SET ticket_channel = ? WHERE id = ?", (channel_id, ticket_number))
-                    conn.commit()
+                embed = discord.Embed(
+                    description=f'{interaction.user.mention} has created a new **{selected_label}** ticket,\n'
+                                'describe your Problem and please be patient for our Support Team to help you soon.',
+                    color=discord.colour.Color.purple()
+                )
 
-                    embed = discord.Embed(description=f'📬 Ticket was Created! Look here --> {ticket_channel.mention}',
+                await ticket_channel.send(
+                    content=f"{interaction.user.mention} {guild.get_role(TEAM_ROLE).mention}"
+                )
+
+                await ticket_channel.send(embed=embed, view=CloseButton(bot=self.bot))
+                
+                channel_id = ticket_channel.id
+                cur.execute("UPDATE ticket SET ticket_channel = ? WHERE id = ?", (channel_id, ticket_number))
+                conn.commit()
+
+                embed = discord.Embed(description=f'📬 Ticket was Created! Look here --> {ticket_channel.mention}',  
                                             color=discord.colour.Color.green())
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                    await asyncio.sleep(1)
-                    embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.blue())
-                    await interaction.message.edit(embed=embed, view=MyView(bot=self.bot)) #This will reset the SelectMenu in the Ticket Channel
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                await asyncio.sleep(1)
+                embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.blue())
+                await interaction.message.edit(embed=embed, view=MyView(bot=self.bot)) #This will reset the SelectMenu in the Ticket Channel
+
         else:
             embed = discord.Embed(title=f"You already have a open Ticket", color=0xff0000)
             await interaction.followup.send(embed=embed, ephemeral=True) #This will tell the User that he already has a Ticket open
