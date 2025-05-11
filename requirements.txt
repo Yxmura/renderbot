@@ -6,3 +6,4 @@ datetime
 flask
 requests
 dotenv
+discord.py
