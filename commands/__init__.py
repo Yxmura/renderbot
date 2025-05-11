@@ -14,7 +14,7 @@ from .reaction_roles import createrolemenu, deleterolemenu
 from .setup import setup
 from .welcome import setup as welcome_setup
 from .goodbye import setup as goodbye_setup
-from .giveaway import creategiveaway, setupgiveaway
+from .giveaway import creategiveaway, setupgiveaway, check_giveaways
 from .reminder import remind, check_reminders
 from .kiss import kiss
 from .poll import createpoll, setuppoll, check_polls
@@ -45,6 +45,7 @@ __all__ = [
     # 'viewbirthday', # Removed
     'creategiveaway',
     'setupgiveaway',
+    'check_giveaways',
     'remind',
     'check_reminders',
     'kiss',
