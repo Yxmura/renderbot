@@ -11,6 +11,7 @@ BIRTHDAY_FILE = "birthdays.json"
 
 class BirthdayManager:
     def __init__(self):
+        
         self.birthdays = {}
         self.load_birthdays()
 
@@ -43,6 +44,9 @@ class BirthdayManager:
 class BirthdayCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.bot.tree.add_command(self.setbirthday)
+        self.bot.tree.add_command(self.mybirthday)
+        self.bot.tree.add_command(self.setupbirthdays)
         self.manager = BirthdayManager()
         self.birthday_channel_id = None
         self.bot.loop.create_task(self.check_birthdays_loop())
