@@ -11,9 +11,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 TEST_GUILD_ID = 1317605088558190602  # Set this to an integer like 123456789012345678 if you want fast syncing
 
 async def setup_commands():
-    for filename in os.listdir("./commands"):
-        if filename.endswith(".py"):
-            await bot.load_extension(f"commands.{filename[:-3]}")
+    commands_dir = "./commands"
+    if os.path.exists(commands_dir):
+        for filename in os.listdir(commands_dir):
+            if filename.endswith(".py") and not filename.startswith("_") and filename != "__init__.py":
+                try:
+                    await bot.load_extension(f"commands.{filename[:-3]}")
+                    print(f"Loaded cog: commands.{filename[:-3]}")
+                except Exception as e:
+                    print(f"Failed to load cog commands.{filename[:-3]}: {e}")
+
 
 @bot.event
 async def on_ready():
