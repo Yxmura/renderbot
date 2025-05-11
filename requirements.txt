@@ -3,3 +3,7 @@ py-cord==2.4.0
 chat-exporter
 pytz
 datetime
+flask
+requests
+dotenv
+os
