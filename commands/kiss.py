@@ -3,7 +3,7 @@ from discord import app_commands
 import aiohttp
 import random
 
-KISS_GIF_URL = "https://api.otakugifs.xyz/gif?reaction=kiss&id="+random.randint(1,1000000)
+KISS_GIF_URL = "https://api.otakugifs.xyz/gif?reaction=kiss&id="+str(random.randint(1,1000000))
 
 @app_commands.command(name="kiss", description="Kiss someone in the server")
 @app_commands.describe(
