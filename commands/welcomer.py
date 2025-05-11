@@ -36,5 +36,5 @@ class WelcomeGoodbyeCog(commands.Cog):
                 await channel.send(embed=embed)
 
 # Setup function to add the cog to the bot
-def setup(bot):
+async def setup(bot):
     bot.add_cog(WelcomeGoodbyeCog(bot))

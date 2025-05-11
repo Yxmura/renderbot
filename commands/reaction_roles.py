@@ -257,5 +257,5 @@ async def deleterolemenu(
         ephemeral=True
     )
 
-def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot):
     bot.add_cog(RoleMenu(bot))

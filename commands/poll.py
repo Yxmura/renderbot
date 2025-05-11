@@ -272,5 +272,5 @@ class PollCog(commands.Cog):
         await check_polls(self.bot)
 
 # Setup function to add the cog to the bot
-def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot):
     bot.add_cog(PollCog(bot))
