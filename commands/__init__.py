@@ -1,5 +1,5 @@
 from .hello import hello
-from .joke import joke
+from .joke import dadjoke
 from .help_command import help_command
 from .rps import rps
 from .meme import meme
@@ -23,7 +23,7 @@ from .poll import createpoll, setuppoll, check_polls
 
 __all__ = [
     'hello',
-    'joke',
+    'dadjoke',
     'help_command',
     'rps',
     'meme',
