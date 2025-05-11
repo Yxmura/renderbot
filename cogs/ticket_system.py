@@ -41,6 +41,7 @@ class Ticket_System(commands.Cog):
         self.bot.add_view(MyView(bot=self.bot))
         self.bot.add_view(CloseButton(bot=self.bot))
         self.bot.add_view(TicketOptions(bot=self.bot))
+        self.bot.add_view(TicketClaimButton(bot=self.bot))
 
     #Closes the Connection to the Database when shutting down the Bot
     @commands.Cog.listener()
@@ -103,24 +104,25 @@ class MyView(discord.ui.View):
             if interaction.channel.id == TICKET_CHANNEL:
                 guild = self.bot.get_guild(GUILD_ID)
 
-                cur.execute("INSERT INTO ticket (discord_name, discord_id, ticket_created) VALUES (?, ?, ?)", (user_name, user_id, creation_date)) #If the User doesn't have a Ticket open it will insert the User into the Database and create a Ticket
+                cur.execute("INSERT INTO ticket (discord_name, discord_id, ticket_created) VALUES (?, ?, ?)", (user_name, user_id, creation_date))
                 conn.commit()
                 await asyncio.sleep(1)
-                cur.execute("SELECT id FROM ticket WHERE discord_id=?", (user_id,)) #Get the Ticket Number from the Database
+                cur.execute("SELECT id FROM ticket WHERE discord_id=?", (user_id,))
                 ticket_number = cur.fetchone()[0]
 
                 category = self.bot.get_channel(CATEGORY_ID)
-                ticket_channel = await guild.create_text_channel(f"ticket-{ticket_number}", category=category,
-                                                                    topic=f"{interaction.user.id}")
+                # Modify the channel creation permissions to only allow the user and the team role to view initially
+                ticket_channel = await guild.create_text_channel(
+                    f"ticket-{ticket_number}",
+                    category=category,
+                    topic=f"{interaction.user.id}",
+                    overwrites={
+                        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                        interaction.user: discord.PermissionOverwrite(send_messages=True, read_messages=True, add_reactions=False, embed_links=True, attach_files=True, read_message_history=True, external_emojis=True),
+                        guild.get_role(TEAM_ROLE): discord.PermissionOverwrite(send_messages=True, read_messages=True, add_reactions=False, embed_links=True, attach_files=True, read_message_history=True, external_emojis=True)
+                    }
+                )
 
-                await ticket_channel.set_permissions(guild.get_role(TEAM_ROLE), send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the Staff Team
-                                                        embed_links=True, attach_files=True, read_message_history=True,
-                                                        external_emojis=True)
-                await ticket_channel.set_permissions(interaction.user, send_messages=True, read_messages=True, add_reactions=False, #Set the Permissions for the User
-                                                        embed_links=True, attach_files=True, read_message_history=True,
-                                                        external_emojis=True)
-                await ticket_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False, view_channel=False) #Set the Permissions for the @everyone role
-                
                 selected_value = interaction.data["values"][0]
                 selected_label = next(
                     (option.label for option in select.options if option.value == selected_value),
@@ -134,28 +136,30 @@ class MyView(discord.ui.View):
                 )
 
                 await ticket_channel.send(
-                    content=f"{interaction.user.mention} {guild.get_role(TEAM_ROLE).mention}"
+                    content=f"{interaction.user.mention} {guild.get_role(TEAM_ROLE).mention}",
+                    view=TicketClaimButton(bot=self.bot) # Add the claim button here
                 )
 
-                await ticket_channel.send(embed=embed, view=CloseButton(bot=self.bot))
-                
+                await ticket_channel.send(embed=embed, view=CloseButton(bot=self.bot)) # Keep the close button here
+
+
                 channel_id = ticket_channel.id
                 cur.execute("UPDATE ticket SET ticket_channel = ? WHERE id = ?", (channel_id, ticket_number))
                 conn.commit()
 
-                embed = discord.Embed(description=f'📬 Ticket was Created! Look here --> {ticket_channel.mention}',  
+                embed = discord.Embed(description=f'📬 Ticket was Created! Look here --> {ticket_channel.mention}',
                                             color=discord.colour.Color.green())
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 await asyncio.sleep(1)
-                embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.blue())
-                await interaction.message.edit(embed=embed, view=MyView(bot=self.bot)) #This will reset the SelectMenu in the Ticket Channel
+                embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.purple())
+                await interaction.message.edit(embed=embed, view=MyView(bot=self.bot))
 
         else:
             embed = discord.Embed(title=f"You already have a open Ticket", color=0xff0000)
-            await interaction.followup.send(embed=embed, ephemeral=True) #This will tell the User that he already has a Ticket open
+            await interaction.followup.send(embed=embed, ephemeral=True)
             await asyncio.sleep(1)
-            embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.blue())
-            await interaction.message.edit(embed=embed, view=MyView(bot=self.bot)) #This will reset the SelectMenu in the Ticket Channel
+            embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.purple())
+            await interaction.message.edit(embed=embed, view=MyView(bot=self.bot))
 
 #First Button for the Ticket 
 class CloseButton(discord.ui.View):
@@ -169,6 +173,24 @@ class CloseButton(discord.ui.View):
         await interaction.response.send_message(embed=embed, view=TicketOptions(bot=self.bot)) #This will show the User the TicketOptions View
         await interaction.message.edit(view=self)
 
+class TicketClaimButton(discord.ui.View):
+    def __init__(self, bot):
+        self.bot = bot
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Claim Ticket", style=discord.ButtonStyle.green, custom_id="claim")
+    async def claim_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
+        team_role = interaction.guild.get_role(TEAM_ROLE)
+        if team_role in interaction.user.roles:
+            ticket_channel = interaction.channel
+            await ticket_channel.set_permissions(interaction.guild.default_role, send_messages=False, read_messages=False, view_channel=False)
+            await ticket_channel.set_permissions(interaction.user, send_messages=True, read_messages=True, add_reactions=False, embed_links=True, attach_files=True, read_message_history=True, external_emojis=True)
+            await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}!", ephemeral=False)
+            # Remove the claim button after claiming
+            self.remove_item(button)
+            await interaction.message.edit(view=self)
+        else:
+            await interaction.response.send_message("You do not have permission to claim tickets.", ephemeral=True)
 
 #Buttons to reopen or delete the Ticket
 class TicketOptions(discord.ui.View):
@@ -204,7 +226,7 @@ class TicketOptions(discord.ui.View):
             filename=f"transcript-{interaction.channel.name}.html")
         
         embed = discord.Embed(description=f'Ticket is deleting in 5 seconds.', color=0xff0000)
-        transcript_info = discord.Embed(title=f"Ticket Deleted | {interaction.channel.name}", color=discord.colour.Color.blue())
+        transcript_info = discord.Embed(title=f"Ticket Deleted | {interaction.channel.name}", color=discord.colour.Color.purple())
         transcript_info.add_field(name="ID", value=id, inline=True)
         transcript_info.add_field(name="Opened by", value=ticket_creator.mention, inline=True)
         transcript_info.add_field(name="Closed by", value=interaction.user.mention, inline=True)
