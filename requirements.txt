@@ -6,4 +6,3 @@ datetime
 flask
 requests
 dotenv
-os
