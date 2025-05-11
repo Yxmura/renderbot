@@ -15,7 +15,7 @@ class Utilities(commands.Cog):
         embed = discord.Embed(
             title="🏓 Pong!",
             description=f"Bot Latency: **{latency}ms**",
-            color=discord.Color.blue()
+            color=discord.Color.purple()
         )
         
         await interaction.response.send_message(embed=embed)

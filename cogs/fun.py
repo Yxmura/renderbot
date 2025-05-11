@@ -115,7 +115,7 @@ async def check_reminders(bot):
                         embed = discord.Embed(
                             title="⏰ Reminder",
                             description=reminder.message,
-                            color=discord.Color.blue()
+                            color=discord.Color.purple()
                         )
                         embed.set_footer(text=f"Reminder set by {user.name}")
                         await channel.send(f"{user.mention} Here's your reminder!", embed=embed)
@@ -398,7 +398,7 @@ class FunCommands(commands.Cog):
 
         embed = discord.Embed(
             title="Rock Paper Scissors",
-            color=discord.Color.blue()
+            color=discord.Color.purple()
         )
         embed.add_field(name="Your Choice", value=f"`{choice}`", inline=True)
         embed.add_field(name="My Choice", value=f"`{bot_choice}`", inline=True)
@@ -414,7 +414,7 @@ class FunCommands(commands.Cog):
         embed = discord.Embed(
             title="🏳️ Flag Guessing Game",
             description="Guess the country of the flag shown below!",
-            color=discord.Color.blue()
+            color=discord.Color.purple()
         )
         
         country_code = COUNTRIES[game.correct_answer]

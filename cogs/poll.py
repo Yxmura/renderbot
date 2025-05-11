@@ -126,7 +126,7 @@ async def check_polls(bot):
                         embed = discord.Embed(
                             title=f"📊 Poll Results: {poll.title}",
                             description=poll.description,
-                            color=discord.Color.blue()
+                            color=discord.Color.purple()
                         )
                         embed.add_field(
                             name="Results",
@@ -210,7 +210,7 @@ class PollCog(commands.Cog):
             title=f"📊 {title}",
             description=f"{description}\n\n"
                     f"Ends: <t:{int(end_time.timestamp())}:R>",
-            color=discord.Color.blue()
+            color=discord.Color.purple()
         )
         embed.set_footer(text=f"Created by {interaction.user.name}")
 
