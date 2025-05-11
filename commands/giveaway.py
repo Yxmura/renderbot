@@ -8,7 +8,7 @@ import random
 from typing import Optional, List
 
 GIVEAWAY_FILE = "giveaways.json"
-REQUIRED_ROLE_ID = 1317607057687576696
+REQUIRED_ROLE_ID = 1317607057687576696  # Default required role for admins to create giveaways
 
 class Giveaway:
     def __init__(
@@ -189,144 +189,154 @@ async def check_giveaways(bot):
                 giveaway_manager.remove_giveaway(giveaway_id)
         await asyncio.sleep(60)
 
-@app_commands.command(name="creategiveaway", description="Create a new giveaway")
-@app_commands.describe(
-    channel="The channel to host the giveaway in",
-    prize="The prize for the giveaway",
-    description="Description of the giveaway",
-    winners="Number of winners",
-    duration="Duration in hours",
-    required_role="Role required to enter (optional)",
-    min_account_age="Minimum account age in days (optional)",
-    min_messages="Minimum messages required (optional)",
-    allowed_roles="Roles allowed to enter (optional, comma-separated)",
-    excluded_roles="Roles excluded from entering (optional, comma-separated)",
-    color="Color of the embed (hex code, optional)"
-)
-async def creategiveaway(
-    interaction: discord.Interaction,
-    channel: discord.TextChannel,
-    prize: str,
-    description: str,
-    winners: app_commands.Range[int, 1, 10],
-    duration: app_commands.Range[int, 1, 168],
-    required_role: Optional[discord.Role] = None,
-    min_account_age: Optional[app_commands.Range[int, 1, 3650]] = None,
-    min_messages: Optional[app_commands.Range[int, 1, 10000]] = None,
-    allowed_roles: Optional[str] = None,
-    excluded_roles: Optional[str] = None,
-    color: Optional[str] = None
-):
-    if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
+class GiveawayCog(discord.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.bot.loop.create_task(check_giveaways(bot))
+
+    @app_commands.command(name="creategiveaway", description="Create a new giveaway")
+    @app_commands.describe(
+        channel="The channel to host the giveaway in",
+        prize="The prize for the giveaway",
+        description="Description of the giveaway",
+        winners="Number of winners",
+        duration="Duration in hours",
+        required_role="Role required to enter (optional)",
+        min_account_age="Minimum account age in days (optional)",
+        min_messages="Minimum messages required (optional)",
+        allowed_roles="Roles allowed to enter (optional, comma-separated)",
+        excluded_roles="Roles excluded from entering (optional, comma-separated)",
+        color="Color of the embed (hex code, optional)"
+    )
+    async def creategiveaway(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        prize: str,
+        description: str,
+        winners: app_commands.Range[int, 1, 10],
+        duration: app_commands.Range[int, 1, 168],
+        required_role: Optional[discord.Role] = None,
+        min_account_age: Optional[app_commands.Range[int, 1, 3650]] = None,
+        min_messages: Optional[app_commands.Range[int, 1, 10000]] = None,
+        allowed_roles: Optional[str] = None,
+        excluded_roles: Optional[str] = None,
+        color: Optional[str] = None
+    ):
+        if not any(role.id == REQUIRED_ROLE_ID for role in interaction.user.roles):
+            await interaction.response.send_message(
+                "You don't have permission to create giveaways!",
+                ephemeral=True
+            )
+            return
+
+        try:
+            if color:
+                color = int(color.strip('#'), 16)
+            else:
+                color = 0x2F3136
+        except ValueError:
+            await interaction.response.send_message(
+                "Invalid color code! Please provide a valid hex color code.",
+                ephemeral=True
+            )
+            return
+
+        allowed_role_ids = []
+        if allowed_roles:
+            for role_id in allowed_roles.split(','):
+                try:
+                    role = interaction.guild.get_role(int(role_id.strip()))
+                    if role:
+                        allowed_role_ids.append(role.id)
+                except:
+                    continue
+
+        excluded_role_ids = []
+        if excluded_roles:
+            for role_id in excluded_roles.split(','):
+                try:
+                    role = interaction.guild.get_role(int(role_id.strip()))
+                    if role:
+                        excluded_role_ids.append(role.id)
+                except:
+                    continue
+
+        end_time = datetime.now() + timedelta(hours=duration)
+        
+        embed = discord.Embed(
+            title="🎉 GIVEAWAY",
+            description=f"**Prize:** {prize}\n\n"
+                       f"{description}\n\n"
+                       f"**Winners:** {winners}\n"
+                       f"**Ends:** <t:{int(end_time.timestamp())}:R>\n\n"
+                       f"Click the button below to enter!",
+            color=color
+        )
+
+        if required_role:
+            embed.add_field(name="Required Role", value=required_role.mention, inline=True)
+        if min_account_age:
+            embed.add_field(name="Minimum Account Age", value=f"{min_account_age} days", inline=True)
+        if min_messages:
+            embed.add_field(name="Minimum Messages", value=str(min_messages), inline=True)
+        if allowed_role_ids:
+            embed.add_field(name="Allowed Roles", value=", ".join([f"<@&{role_id}>" for role_id in allowed_role_ids]), inline=False)
+        if excluded_role_ids:
+            embed.add_field(name="Excluded Roles", value=", ".join([f"<@&{role_id}>" for role_id in excluded_role_ids]), inline=False)
+
+        embed.set_footer(text=f"Hosted by {interaction.user.name}")
+        
+        giveaway = Giveaway(
+            message_id=0,  # Will be set after sending
+            channel_id=channel.id,
+            guild_id=interaction.guild_id,
+            prize=prize,
+            description=description,
+            winners=winners,
+            end_time=end_time,
+            host_id=interaction.user.id,
+            required_role_id=required_role.id if required_role else None,
+            min_account_age=min_account_age,
+            min_messages=min_messages,
+            allowed_roles=allowed_role_ids,
+            excluded_roles=excluded_role_ids,
+            color=color
+        )
+
+        view = GiveawayView(giveaway)
+        message = await channel.send(embed=embed, view=view)
+        
+        giveaway.message_id = message.id
+        giveaway_manager.add_giveaway(str(message.id), giveaway)
+
         await interaction.response.send_message(
-            "You don't have permission to create giveaways!",
+            f"Giveaway created in {channel.mention}!",
             ephemeral=True
         )
-        return
 
-    try:
-        if color:
-            color = int(color.strip('#'), 16)
-        else:
-            color = 0x2F3136
-    except ValueError:
-        await interaction.response.send_message(
-            "Invalid color code! Please provide a valid hex color code.",
-            ephemeral=True
+    @app_commands.command(name="setupgiveaway", description="Setup the giveaway system")
+    @app_commands.default_permissions(administrator=True)
+    async def setupgiveaway(
+        self,
+        interaction: discord.Interaction,
+        required_role: discord.Role
+    ):
+        global REQUIRED_ROLE_ID
+        REQUIRED_ROLE_ID = required_role.id
+
+        embed = discord.Embed(
+            title="🎉 Giveaway System Setup",
+            description="The giveaway system has been configured with the following settings:",
+            color=discord.Color.green()
         )
-        return
+        embed.add_field(
+            name="Required Role",
+            value=required_role.mention,
+            inline=True
+        )
 
-    allowed_role_ids = []
-    if allowed_roles:
-        for role_id in allowed_roles.split(','):
-            try:
-                role = interaction.guild.get_role(int(role_id.strip()))
-                if role:
-                    allowed_role_ids.append(role.id)
-            except:
-                continue
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    excluded_role_ids = []
-    if excluded_roles:
-        for role_id in excluded_roles.split(','):
-            try:
-                role = interaction.guild.get_role(int(role_id.strip()))
-                if role:
-                    excluded_role_ids.append(role.id)
-            except:
-                continue
-
-    end_time = datetime.now() + timedelta(hours=duration)
-    
-    embed = discord.Embed(
-        title="🎉 GIVEAWAY",
-        description=f"**Prize:** {prize}\n\n"
-                   f"{description}\n\n"
-                   f"**Winners:** {winners}\n"
-                   f"**Ends:** <t:{int(end_time.timestamp())}:R>\n\n"
-                   f"Click the button below to enter!",
-        color=color
-    )
-
-    if required_role:
-        embed.add_field(name="Required Role", value=required_role.mention, inline=True)
-    if min_account_age:
-        embed.add_field(name="Minimum Account Age", value=f"{min_account_age} days", inline=True)
-    if min_messages:
-        embed.add_field(name="Minimum Messages", value=str(min_messages), inline=True)
-    if allowed_role_ids:
-        embed.add_field(name="Allowed Roles", value=", ".join([f"<@&{role_id}>" for role_id in allowed_role_ids]), inline=False)
-    if excluded_role_ids:
-        embed.add_field(name="Excluded Roles", value=", ".join([f"<@&{role_id}>" for role_id in excluded_role_ids]), inline=False)
-
-    embed.set_footer(text=f"Hosted by {interaction.user.name}")
-    
-    giveaway = Giveaway(
-        message_id=0,  # Will be set after sending
-        channel_id=channel.id,
-        guild_id=interaction.guild_id,
-        prize=prize,
-        description=description,
-        winners=winners,
-        end_time=end_time,
-        host_id=interaction.user.id,
-        required_role_id=required_role.id if required_role else None,
-        min_account_age=min_account_age,
-        min_messages=min_messages,
-        allowed_roles=allowed_role_ids,
-        excluded_roles=excluded_role_ids,
-        color=color
-    )
-
-    view = GiveawayView(giveaway)
-    message = await channel.send(embed=embed, view=view)
-    
-    giveaway.message_id = message.id
-    giveaway_manager.add_giveaway(str(message.id), giveaway)
-
-    await interaction.response.send_message(
-        f"Giveaway created in {channel.mention}!",
-        ephemeral=True
-    )
-
-@app_commands.command(name="setupgiveaway", description="Setup the giveaway system")
-@app_commands.default_permissions(administrator=True)
-async def setupgiveaway(
-    interaction: discord.Interaction,
-    required_role: discord.Role
-):
-    global REQUIRED_ROLE_ID
-    REQUIRED_ROLE_ID = required_role.id
-
-    embed = discord.Embed(
-        title="🎉 Giveaway System Setup",
-        description="The giveaway system has been configured with the following settings:",
-        color=discord.Color.green()
-    )
-    embed.add_field(
-        name="Required Role",
-        value=required_role.mention,
-        inline=True
-    )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True) 
+async def setup(bot):
+    await bot.add_cog(GiveawayCog(bot))

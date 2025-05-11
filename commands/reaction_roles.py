@@ -3,9 +3,9 @@ from discord import app_commands
 import json
 import os
 from typing import List, Optional
+from discord.ext import commands
 
 ROLE_MENUS_FILE = "role_menus.json"
-
 REQUIRED_ROLE_ID = 1317607057687576696
 
 class RoleMenu:
@@ -255,4 +255,7 @@ async def deleterolemenu(
     await interaction.response.send_message(
         "Role menu deleted successfully!",
         ephemeral=True
-    ) 
+    )
+
+def setup(bot: commands.Bot):
+    bot.add_cog(RoleMenu(bot))
