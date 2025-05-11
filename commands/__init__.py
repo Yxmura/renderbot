@@ -3,15 +3,14 @@ from .joke import dadjoke
 from .help_command import help_command
 from .rps import rps
 from .meme import meme
-from .embed import embed
+from .embed import create_embed
 from .coinflip import coinflip
-from .fact import fact
+from .fact import random_fact
 from .ping import ping
 from .ticket import ticket, setup_tickets
 from .flagguess import flagguess
 from .birthday import setbirthday, mybirthday, setup_birthdays, check_birthdays
 from .reaction_roles import createrolemenu, deleterolemenu
-from .help import help
 from .setup import setup
 from .welcome import setup as welcome_setup
 from .goodbye import setup as goodbye_setup
@@ -27,9 +26,9 @@ __all__ = [
     'help_command',
     'rps',
     'meme',
-    'embed',
+    'create_embed',
     'coinflip',
-    'fact',
+    'random_fact',
     'ping',
     'ticket',
     'setup_tickets',
@@ -40,7 +39,6 @@ __all__ = [
     'check_birthdays',
     'createrolemenu',
     'deleterolemenu',
-    'help',
     'setup',
     'welcome_setup',
     'goodbye_setup',
