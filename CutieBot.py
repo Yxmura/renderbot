@@ -5,6 +5,7 @@ import os
 
 # Your bot setup
 intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Optional: replace with your guild ID for faster slash command updates during testing
