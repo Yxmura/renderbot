@@ -8,7 +8,7 @@ class Utilities(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="ping", description="Check the bot's latency")
+    @commands.slash_command(name="ping", description="Check the bot's latency")
     async def ping(self, interaction: discord.Interaction):
         latency = round(interaction.client.latency * 1000)
         
@@ -20,7 +20,7 @@ class Utilities(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(
+    @commands.slash_command(
         name="embed",
         description="Create a custom embed message (Requires a specific role)"
     )

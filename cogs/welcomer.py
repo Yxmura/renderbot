@@ -2,8 +2,7 @@ import discord
 from discord.ext import commands
 
 # Replace these with your actual channel IDs
-GOODBYE_CHANNEL_ID = 1367574829208699020  # Goodbye channel ID
-WELCOME_CHANNEL_ID = None  # Set this to your welcome channel ID
+CHANNEL_ID = 1367574829208699020  # Goodbye channel ID
 
 class WelcomeGoodbyeCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -11,8 +10,8 @@ class WelcomeGoodbyeCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        if WELCOME_CHANNEL_ID:
-            channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
+        if CHANNEL_ID:
+            channel = member.guild.get_channel(CHANNEL_ID)
             if channel:
                 embed = discord.Embed(
                     title="👋 Welcome!",
@@ -24,8 +23,8 @@ class WelcomeGoodbyeCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        if GOODBYE_CHANNEL_ID:
-            channel = member.guild.get_channel(GOODBYE_CHANNEL_ID)
+        if CHANNEL_ID:
+            channel = member.guild.get_channel(CHANNEL_ID)
             if channel:
                 embed = discord.Embed(
                     title="👋 Goodbye!",
