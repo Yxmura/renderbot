@@ -13,7 +13,7 @@ from io import BytesIO
 
 REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
-SUBREDDITS = ["memes", "dankmemes", "wholesomememes"]
+MEME_API_URL = "https://meme-api.com/gimme"
 JOKE_API_URL = "https://icanhazdadjoke.com/"
 HEADERS = {"Accept": "application/json"}
 # Dictionary of countries and their codes
@@ -325,28 +325,35 @@ class FunCommands(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="meme", description="Get a random meme from Reddit")
+    @app_commands.command(name="meme", description="Get a random meme")
     async def meme(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        subreddit = random.choice(SUBREDDITS)
-        url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=100"
+        await interaction.response.defer() # Defer the interaction
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers={'User-Agent': 'Mozilla/5.0'}) as resp:
+                api_url = MEME_API_URL
+
+                async with session.get(api_url) as resp:
                     if resp.status != 200:
-                        await interaction.followup.send("Couldn't fetch memes right now.")
+                        await interaction.followup.send("Couldn't fetch a meme right now from the API.")
                         return
+
                     data = await resp.json()
-            posts = data.get('data', {}).get('children', [])
-            valid_posts = [p for p in posts if not p['data'].get('is_video') and not p['data'].get('over_18')]
-            if not valid_posts:
-                await interaction.followup.send("Couldn't find a meme. Try again.")
-                return
-            post = random.choice(valid_posts)
-            embed = Embed(title=post['data']['title'], color=Color.orange())
-            embed.set_image(url=post['data']['url'])
-            await interaction.followup.send(embed=embed)
+
+                    if not data or not data.get('url'):
+                         await interaction.followup.send("Couldn't get meme data from the API.")
+                         return
+
+                    meme_title = data.get('title', 'No Title')
+                    meme_image_url = data.get('url')
+                    meme_subreddit = data.get('subreddit', 'Unknown Subreddit')
+                    meme_post_link = data.get('postLink')
+
+                    embed = Embed(title=meme_title, color=Color.orange())
+                    embed.set_image(url=meme_image_url)
+
+                    await interaction.followup.send(embed=embed)
+
         except Exception as e:
             await interaction.followup.send(f"Failed to fetch meme: {e}")
 
