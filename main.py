@@ -24,14 +24,7 @@ bot = commands.Bot(intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
-    bot.add_cog(Ticket_System(bot))
-    bot.add_cog(Ticket_Command(bot))
-    bot.add_cog(FunCommands(bot)) 
-    bot.add_cog(Utilities(bot))
     richpresence.start()
-
-    richpresence.start()
-
 
 #Bot Status, Counting all opened Tickets in the Server. You need to add/change things if you have more or less than 2 Categories
 @tasks.loop(minutes=1)
@@ -46,6 +39,10 @@ def main():
     keep_alive()
     try:
         print("Starting bot...")
+        bot.add_cog(Ticket_System(bot))
+        bot.add_cog(Ticket_Command(bot))
+        bot.add_cog(FunCommands(bot)) 
+        bot.add_cog(Utilities(bot))
         bot.run(BOT_TOKEN)
     except discord.errors.LoginFailure:
         print("Error: Invalid Discord token. Please check your .env file.")
