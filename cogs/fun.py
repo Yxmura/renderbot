@@ -1,7 +1,7 @@
 import requests
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands, Embed, Color, File
+from discord import app_commands, Embed, Color, File, ui
 import random
 import aiohttp
 import json
@@ -13,9 +13,10 @@ from io import BytesIO
 
 REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
-MEME_API_URL = "https://meme-api.com/gimme"
 JOKE_API_URL = "https://icanhazdadjoke.com/"
 HEADERS = {"Accept": "application/json"}
+MEME_API_URL = "https://meme-api.com/gimme" # API for memes
+
 # Dictionary of countries and their codes
 COUNTRIES = {
     "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", "Andorra": "AD", "Angola": "AO",
@@ -31,7 +32,7 @@ COUNTRIES = {
     "Equatorial Guinea": "GQ", "Eritrea": "ER", "Estonia": "EE", "Ethiopia": "ET", "Fiji": "FJ",
     "Finland": "FI", "France": "FR", "Gabon": "GA", "Gambia": "GM", "Georgia": "GE",
     "Germany": "DE", "Ghana": "GH", "Greece": "GR", "Grenada": "GD", "Guatemala": "GT",
-    "Guinea": "GN", "Guinea-Bissau": "GW", "Guyana": "GY", "Haiti": "HT", "Honduras": "HN",
+    "Guinea": "GN", "Guinea-Bissau": "GW", "Guyana": "GUY", "Haiti": "HT", "Honduras": "HN",
     "Hungary": "HU", "Iceland": "IS", "India": "IN", "Indonesia": "ID", "Iran": "IR",
     "Iraq": "IQ", "Ireland": "IE", "Italy": "IT", "Jamaica": "JM",
     "Japan": "JP", "Jordan": "JO", "Kazakhstan": "KZ", "Kenya": "KE", "Kiribati": "KI",
@@ -106,39 +107,42 @@ class ReminderManager:
 
 reminder_manager = ReminderManager()
 
-async def check_reminders(bot: commands.Bot):
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        now = datetime.now()
-        for reminder_id, reminder in list(reminder_manager.reminders.items()):
-            if now >= reminder.end_time:
-                channel = bot.get_channel(reminder.channel_id)
-                if channel:
-                    user = bot.get_user(reminder.user_id)
-                    if user:
-                        embed = Embed(
-                            title="⏰ Reminder",
-                            description=reminder.message,
-                            color=Color.purple()
-                        )
-                        embed.set_footer(text=f"Reminder set by {user.name}")
-                        await channel.send(f"{user.mention} Here's your reminder!", embed=embed)
-                reminder_manager.remove_reminder(reminder_id)
-        await asyncio.sleep(60)
+# View for the "Play Again" button
+class PlayAgainView(ui.View):
+    def __init__(self, cog: commands.Cog):
+        super().__init__(timeout=300) # Timeout after 5 minutes of inactivity
+        self.cog = cog # Keep a reference to the cog to access the game state
 
+    @ui.button(label="Play Again", style=discord.ButtonStyle.green)
+    async def play_again_button(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.channel_id in self.cog.active_flag_game_channels:
+             await interaction.response.send_message("A flag guessing game is already starting in this channel!", ephemeral=True)
+             return
+
+        # Stop this view to disable the button
+        self.stop()
+        try:
+            await interaction.message.edit(view=None) # Remove the button from the previous message
+        except:
+            pass # Ignore if the message was deleted
+
+        await interaction.response.send_message("Starting a new flag guessing game...")
+        # Use a task to start the new game to avoid blocking the interaction
+        asyncio.create_task(self.cog.start_new_flag_game(interaction.channel))
+
+
+# Modified FlagGame for a single round with Play Again button
 class FlagGame:
-    def __init__(self, channel: discord.TextChannel):
+    def __init__(self, channel: discord.TextChannel, cog: commands.Cog):
         self.channel = channel
+        self.cog = cog # Reference to the cog to access active_flag_game_channels
         self.current_flag = None
         self.options = []
         self.correct_answer = None
         self.answered = False
-        self.scores = {}
-        self.active = True
-        self.guessed_users = set()
-        self.message = None
-        
-    def generate_round(self):
+        self.message: Optional[discord.Message] = None # To store the game message
+
+    def generate_round_data(self):
         self.correct_answer = random.choice(list(COUNTRIES.keys()))
 
         wrong_options = random.sample(
@@ -149,69 +153,106 @@ class FlagGame:
         self.options = [self.correct_answer] + wrong_options
         random.shuffle(self.options)
         self.answered = False
-        self.guessed_users.clear()
 
-class FlagGuessView(discord.ui.View):
-    def __init__(self, game: FlagGame):
-        super().__init__(timeout=30)
-        self.game = game
-        self.add_buttons()
+    async def start_round(self, interaction: discord.Interaction):
+        self.generate_round_data()
 
-    def add_buttons(self):
-        for option in self.game.options:
-            button = discord.ui.Button(
-                label=option,
-                style=discord.ButtonStyle.primary,
-                custom_id=option
-            )
-            button.callback = self.button_callback
-            self.add_item(button)
-
-    async def button_callback(self, interaction: discord.Interaction):
-        if interaction.user.id in self.game.guessed_users:
-            await interaction.response.send_message("❌ You've already guessed this round!", ephemeral=True)
-            return
-
-        self.game.guessed_users.add(interaction.user.id)
-
-        if interaction.data["custom_id"] == self.game.correct_answer:
-            self.game.answered = True
-            user_id = interaction.user.id
-            if user_id not in self.game.scores:
-                self.game.scores[user_id] = 0
-            self.game.scores[user_id] += 1
-
-            await interaction.response.send_message(
-                f"✅ Correct! {interaction.user.mention} got it right!\n"
-                f"The flag was from {self.game.correct_answer}!"
-            )
-
-        else:
-            await interaction.response.send_message("❌ Wrong answer! Try again!", ephemeral=True)
-
-    async def on_timeout(self):
-        if not self.game.answered:
-            await self.game.channel.send(
-                f"⏰ Time's up! The correct answer was {self.game.correct_answer}!"
-            )
-
-    async def send_new_round(self):
         embed = Embed(
             title="🏳️ Flag Guessing Game",
             description="Guess the country of this flag:",
             color=Color.purple()
         )
-        code = COUNTRIES[self.game.correct_answer].lower()
+        code = COUNTRIES[self.correct_answer].lower()
         embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
 
-        new_view = FlagGuessView(self.game)
-        self.game.message = await self.game.channel.send(embed=embed, view=new_view)
+        view = FlagGuessView(self) # Pass the game instance to the view
+        self.message = await interaction.response.send_message(embed=embed, view=view)
+
+    async def end_round(self, message: str):
+        if self.message:
+            try:
+                # Disable the view on the original game message
+                await self.message.edit(view=None)
+
+                # Send a separate message with the game result and the Play Again button
+                await self.channel.send(message, view=PlayAgainView(self.cog))
+
+            except Exception as e:
+                print(f"Error ending flag game round or sending play again button: {e}")
+            finally:
+                # Remove the channel from active games when the round ends
+                if self.channel.id in self.cog.active_flag_game_channels:
+                    self.cog.active_flag_game_channels.remove(self.channel.id)
+
+
+class FlagGuessView(ui.View):
+    def __init__(self, game: FlagGame):
+        super().__init__(timeout=30) # Set a timeout for the round
+        self.game = game
+        self.add_buttons()
+
+    def add_buttons(self):
+        for option in self.game.options:
+            button = ui.Button(
+                label=option,
+                style=discord.ButtonStyle.primary,
+                custom_id=option # Custom ID just needs to be unique within the view
+            )
+            button.callback = self.button_callback
+            self.add_item(button)
+
+    async def button_callback(self, interaction: discord.Interaction):
+        if self.game.answered: # Prevent multiple answers in a single-round game
+            await interaction.response.send_message("This round has already ended.", ephemeral=True)
+            return
+
+        self.game.answered = True # Mark the round as answered
+
+        if interaction.data["custom_id"] == self.game.correct_answer:
+            result_message = (
+                f"✅ Correct! {interaction.user.mention} got it right!\n"
+                f"The flag was from **{self.game.correct_answer}**!\n"
+                "Game Over!"
+            )
+            await interaction.response.send_message(
+                f"✅ Correct! You got it!",
+                ephemeral=True # Send ephemeral response to the user first
+            )
+            await self.game.end_round(result_message) # End the round and send the result
+        else:
+            result_message = (
+                f"❌ Wrong answer! {interaction.user.mention} guessed incorrectly.\n"
+                f"The correct answer was **{self.game.correct_answer}**.\n"
+                "Game Over!"
+            )
+            await interaction.response.send_message(
+                 f"❌ Wrong answer!",
+                 ephemeral=True # Send ephemeral response to the user first
+            )
+            await self.game.end_round(result_message) # End the round and send the result
+
+        self.stop() # Stop the view when an answer is received
+
+
+    async def on_timeout(self):
+        if not self.game.answered: # Only end if no one answered
+            result_message = (
+                f"⏰ Time's up! No one guessed in time.\n"
+                f"The correct answer was **{self.game.correct_answer}**.\n"
+                "Game Over!"
+            )
+            await self.game.end_round(result_message) # End the round and send the result
+
+        self.stop() # Stop the view on timeout
 
 
 class FunCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.check_reminders.start()
+        # Set to track channels with an active flag game
+        self.active_flag_game_channels: set[int] = set()
+
 
     def cog_unload(self):
         self.check_reminders.cancel()
@@ -302,8 +343,9 @@ class FunCommands(commands.Cog):
             color=Color.pink()
         ).set_image(url=kiss_gif)
 
+        # Send the message with the pings and the embed
         await interaction.response.send_message(
-            content=f"{interaction.user.mention} kisses {user.mention}!",
+            content=f"{interaction.user.mention} kisses {user.mention}!", # Pings the users outside the embed
             embed=embed
         )
 
@@ -315,8 +357,8 @@ class FunCommands(commands.Cog):
             description=f"The coin landed on: **{result}**",
             color=Color.gold()
         ).set_thumbnail(
-            url="https://i.ibb.co/zT4b26xW/Chat-GPT-Image-May-10-2025-08-18-59-PM.png" if result == "Heads"
-            else "https://i.ibb.co/PvgwZbtJ/Pixel-Art-Golden-Star-Coin.png"
+            url="https://i.ibb.co/gwM94r8/coin-heads.png" if result == "Heads"
+            else "https://i.ibb.co/ZTHtS5D/coin-tails.png"
         )
         await interaction.response.send_message(embed=embed)
 
@@ -335,14 +377,13 @@ class FunCommands(commands.Cog):
 
                     data = await resp.json()
 
+                    # Check if the API returned a meme
                     if not data or not data.get('url'):
                          await interaction.followup.send("Couldn't get meme data from the API.")
                          return
 
                     meme_title = data.get('title', 'No Title')
                     meme_image_url = data.get('url')
-                    meme_subreddit = data.get('subreddit', 'Unknown Subreddit')
-                    meme_post_link = data.get('postLink')
 
                     embed = Embed(title=meme_title, color=Color.orange())
                     embed.set_image(url=meme_image_url)
@@ -375,8 +416,38 @@ class FunCommands(commands.Cog):
 
     @app_commands.command(name="flagguess", description="Start a flag guessing game")
     async def flagguess(self, interaction: discord.Interaction):
-        game = FlagGame(interaction.channel)
-        game.generate_round()
+        if interaction.channel_id in self.active_flag_game_channels:
+            await interaction.response.send_message("A flag guessing game is already active in this channel!", ephemeral=True)
+            return
+
+        self.active_flag_game_channels.add(interaction.channel_id)
+        # Use a task to start the game to avoid blocking the interaction response immediately
+        # Pass the interaction to the start_round method
+        asyncio.create_task(self.start_new_flag_game_from_interaction(interaction))
+
+
+    # Helper method to start a new flag game from an interaction
+    async def start_new_flag_game_from_interaction(self, interaction: discord.Interaction):
+        # Check if the interaction has already been responded to or deferred
+        if not interaction.response.is_done():
+            await interaction.response.defer() # Defer the interaction
+
+        game = FlagGame(interaction.channel, self) # Pass the cog instance
+        # Start the round using the original interaction
+        await game.start_round(interaction)
+
+    # Helper method to start a new flag game from the Play Again button
+    async def start_new_flag_game_from_button(self, channel: discord.TextChannel):
+        if channel.id in self.active_flag_game_channels:
+             # This check should ideally prevent this, but for safety
+             print(f"Attempted to start new game in channel {channel.id} but one is already active.")
+             return
+
+        self.active_flag_game_channels.add(channel.id)
+        game = FlagGame(channel, self) # Pass the cog instance
+        # Since there's no direct interaction to respond to from the button's follow-up,
+        # we just generate round data and send a new message.
+        game.generate_round_data()
 
         embed = Embed(
             title="🏳️ Flag Guessing Game",
@@ -387,8 +458,9 @@ class FunCommands(commands.Cog):
         embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
 
         view = FlagGuessView(game)
-        game.message = await interaction.response.send_message(embed=embed, view=view)
+        game.message = await channel.send(embed=embed, view=view)
 
 
+# Setup function to add the cog to the bot
 async def setup(bot: commands.Bot):
     await bot.add_cog(FunCommands(bot))
