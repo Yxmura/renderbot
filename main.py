@@ -24,11 +24,12 @@ bot = commands.Bot(intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
-    # Ensure the cog setup functions are awaited
-    await bot.add_cog(Ticket_System(bot))
-    await bot.add_cog(Ticket_Command(bot))
-    await bot.add_cog(FunCommands(bot)) 
-    await bot.add_cog(Utilities(bot))
+    bot.add_cog(Ticket_System(bot))
+    bot.add_cog(Ticket_Command(bot))
+    bot.add_cog(FunCommands(bot)) 
+    bot.add_cog(Utilities(bot))
+    richpresence.start()
+
     richpresence.start()
 
 
