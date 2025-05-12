@@ -196,13 +196,6 @@ class FlagGuessView(discord.ui.View):
                 f"The flag was from {self.game.correct_answer}!",
                 embed=scoreboard
             )
-
-            self.game.generate_round()
-            new_view = FlagGuessView(self.game)
-            await self.game.channel.send(
-                f"**New Round!** Guess this flag:",
-                view=new_view
-            )
         else:
             await interaction.response.send_message("❌ Wrong answer! Try again!", ephemeral=True)
 
@@ -295,31 +288,23 @@ class FunCommands(commands.Cog):
             color=discord.Color.gold()
         )
         img = "https://i.ibb.co/gwM94r8/coin-heads.png" if result == "Heads" else "https://i.ibb.co/ZTHtS5D/coin-tails.png"
-        embed.set_thumbnail(url=img)
+        embed.set_image(url=img)
         await ctx.respond(embed=embed)
 
     @commands.slash_command(name="meme", description="Get a random meme from Reddit")
     async def meme(self, ctx: discord.ApplicationContext):
         await ctx.defer()
-        subreddit = random.choice(SUBREDDITS)
-        url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=100"
-
         try:
-            response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = requests.get("https://meme-api.com/gimme")
             if response.status_code == 200:
-                posts = response.json()['data']['children']
-                valid = [p for p in posts if not p['data']['is_video'] and not p['data']['over_18']]
-                if valid:
-                    post = random.choice(valid)
-                    embed = discord.Embed(title=post['data']['title'], color=discord.Color.orange())
-                    embed.set_image(url=post['data']['url'])
-                    await ctx.respond(embed=embed)
-                else:
-                    await ctx.respond("No suitable memes found.")
+                data = response.json()
+                embed = discord.Embed(title=data["title"], url=data["postLink"], color=discord.Color.orange())
+                embed.set_image(url=data["url"])
+                await ctx.respond(embed=embed)
             else:
-                await ctx.respond("Failed to fetch meme.")
+                await ctx.respond("❌ Failed to fetch meme.")
         except Exception as e:
-            await ctx.respond(f"Error: {e}")
+            await ctx.respond(f"❌ Error fetching meme: {e}")
 
     @commands.slash_command(name="rps", description="Play Rock Paper Scissors")
     async def rps(
