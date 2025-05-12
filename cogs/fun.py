@@ -1,14 +1,13 @@
-import requests
-import discord
 from discord.ext import commands
-from discord import app_commands
+import discord
+from discord import Option
+import requests
 import random
+import asyncio
 import aiohttp
 import json
-from typing import Dict, List, Optional
-import asyncio
-import os
 from datetime import datetime, timedelta
+import os
 
 REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
@@ -224,60 +223,38 @@ class FunCommands(commands.Cog):
         self.bot = bot
 
     @commands.slash_command(name="joke", description="Get a terrible dad joke.")
-    async def dadjoke(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-
+    async def dadjoke(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
         try:
             response = requests.get(JOKE_API_URL, headers=HEADERS)
             if response.status_code == 200:
                 joke = response.json().get("joke")
-                await interaction.followup.send(joke)
+                await ctx.respond(joke)
             else:
-                await interaction.followup.send("Sorry, I couldn't fetch a dad joke right now. Try again later.")
+                await ctx.respond("Sorry, I couldn't fetch a dad joke right now.")
         except Exception as e:
-            await interaction.followup.send(f"Error fetching joke: {e}")
+            await ctx.respond(f"Error fetching joke: {e}")
 
     @commands.slash_command(name="remind", description="Set a reminder")
-    @app_commands.describe(
-        time="When to remind you (e.g., '1h', '30m', '1d')",
-        message="What to remind you about"
-    )
     async def remind(
         self,
-        interaction: discord.Interaction,
-        time: str,
-        message: str
+        ctx: discord.ApplicationContext,
+        time: Option(str, description="When to remind you (e.g., 1h, 30m, 1d)"),
+        message: Option(str, description="What to remind you about")
     ):
         try:
-            # Parse time string
             unit = time[-1].lower()
             value = int(time[:-1])
-            
-            if unit == 's':
-                delta = timedelta(seconds=value)
-            elif unit == 'm':
-                delta = timedelta(minutes=value)
-            elif unit == 'h':
-                delta = timedelta(hours=value)
-            elif unit == 'd':
-                delta = timedelta(days=value)
-            else:
-                await interaction.response.send_message(
-                    "Invalid time format! Use 's' for seconds, 'm' for minutes, 'h' for hours, or 'd' for days.",
-                    ephemeral=True
-                )
+            delta = {'s': timedelta(seconds=value), 'm': timedelta(minutes=value),
+                     'h': timedelta(hours=value), 'd': timedelta(days=value)}.get(unit)
+
+            if not delta:
+                await ctx.respond("Invalid time format! Use s, m, h, or d.", ephemeral=True)
                 return
 
             end_time = datetime.now() + delta
-            
-            reminder = Reminder(
-                user_id=interaction.user.id,
-                channel_id=interaction.channel_id,
-                message=message,
-                end_time=end_time
-            )
-
-            reminder_id = f"{interaction.user.id}_{int(end_time.timestamp())}"
+            reminder = Reminder(ctx.user.id, ctx.channel.id, message, end_time)
+            reminder_id = f"{ctx.user.id}_{int(end_time.timestamp())}"
             reminder_manager.add_reminder(reminder_id, reminder)
 
             embed = discord.Embed(
@@ -285,69 +262,45 @@ class FunCommands(commands.Cog):
                 description=f"I'll remind you about:\n{message}",
                 color=discord.Color.green()
             )
-            embed.add_field(
-                name="Time",
-                value=f"<t:{int(end_time.timestamp())}:R>",
-                inline=True
-            )
+            embed.add_field(name="Time", value=f"<t:{int(end_time.timestamp())}:R>", inline=True)
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
+            await ctx.respond(embed=embed, ephemeral=True)
         except ValueError:
-            await interaction.response.send_message(
-                "Invalid time format! Please use a number followed by 's', 'm', 'h', or 'd'.",
-                ephemeral=True
-            )
+            await ctx.respond("Invalid time format!", ephemeral=True)
 
     @commands.slash_command(name="kiss", description="Kiss someone in the server")
-    @app_commands.describe(
-        user="The user to kiss"
-    )
-    async def kiss(self, interaction: discord.Interaction, user: discord.Member):
-        if user.id == interaction.user.id:
-            await interaction.response.send_message(
-                "You can't kiss yourself!",
-                ephemeral=True
-            )
+    async def kiss(
+        self,
+        ctx: discord.ApplicationContext,
+        user: Option(discord.Member, "The user to kiss")
+    ):
+        if user.id == ctx.user.id:
+            await ctx.respond("You can't kiss yourself!", ephemeral=True)
             return
 
         embed = discord.Embed(
             title="💋 Kiss",
-            description=f"{interaction.user.mention} kissed {user.mention}!",
+            description=f"{ctx.user.mention} kissed {user.mention}!",
             color=discord.Color.pink()
         )
+        embed.set_image(url=KISS_GIF_URL)
+        await ctx.respond(f"{ctx.user.mention} {user.mention}", embed=embed)
 
-        # Fetching the kiss gif URL
-        kiss_gif = KISS_GIF_URL
-        embed.set_image(url=kiss_gif)
-
-        # Send the embed with the kiss gif
-        await interaction.response.send_message(
-            f"{interaction.user.mention} {user.mention}",
-            embed=embed,
-            allowed_mentions=discord.AllowedMentions(users=True)
-        )
-
-    @commands.slash_command(name="coinflip", description="Flip a coin - heads or tails")
-    async def coinflip(self, interaction: discord.Interaction):
+    @commands.slash_command(name="coinflip", description="Flip a coin")
+    async def coinflip(self, ctx: discord.ApplicationContext):
         result = random.choice(["Heads", "Tails"])
-
         embed = discord.Embed(
             title="🪙 Coin Flip",
             description=f"The coin landed on: **{result}**",
             color=discord.Color.gold()
         )
-
-        if result == "Heads":
-            embed.set_thumbnail(url="https://i.ibb.co/gwM94r8/coin-heads.png")
-        else:
-            embed.set_thumbnail(url="https://i.ibb.co/ZTHtS5D/coin-tails.png")
-        await interaction.response.send_message(embed=embed)
+        img = "https://i.ibb.co/gwM94r8/coin-heads.png" if result == "Heads" else "https://i.ibb.co/ZTHtS5D/coin-tails.png"
+        embed.set_thumbnail(url=img)
+        await ctx.respond(embed=embed)
 
     @commands.slash_command(name="meme", description="Get a random meme from Reddit")
-    async def meme(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-
+    async def meme(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
         subreddit = random.choice(SUBREDDITS)
         url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=100"
 
@@ -355,74 +308,56 @@ class FunCommands(commands.Cog):
             response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
             if response.status_code == 200:
                 posts = response.json()['data']['children']
-                valid_posts = [post for post in posts if not post['data']['is_video'] and not post['data']['over_18']]
-
-                if valid_posts:
-                    post = random.choice(valid_posts)
-                    title = post['data']['title']
-                    image_url = post['data']['url']
-
-                    embed = discord.Embed(
-                        title=title,
-                        color=discord.Color.orange()
-                    )
-                    embed.set_image(url=image_url)
-
-                    await interaction.followup.send(embed=embed)
+                valid = [p for p in posts if not p['data']['is_video'] and not p['data']['over_18']]
+                if valid:
+                    post = random.choice(valid)
+                    embed = discord.Embed(title=post['data']['title'], color=discord.Color.orange())
+                    embed.set_image(url=post['data']['url'])
+                    await ctx.respond(embed=embed)
                 else:
-                    await interaction.followup.send("Couldn't find a suitable meme. Try again!")
+                    await ctx.respond("No suitable memes found.")
             else:
-                await interaction.followup.send("Failed to fetch meme. Try again later!")
+                await ctx.respond("Failed to fetch meme.")
         except Exception as e:
-            await interaction.followup.send(f"Error fetching meme: {e}")
+            await ctx.respond(f"Error: {e}")
 
-    @commands.slash_command(name="rps", description="Play Rock Paper Scissors with the bot")
-    @app_commands.describe(choice="Your choice: rock, paper, or scissors")
-    @app_commands.choices(choice=[
-        app_commands.Choice(name="rock", value="rock"),
-        app_commands.Choice(name="paper", value="paper"),
-        app_commands.Choice(name="scissors", value="scissors")
-    ])
-    async def rps(self, interaction: discord.Interaction, choice: str):
+    @commands.slash_command(name="rps", description="Play Rock Paper Scissors")
+    async def rps(
+        self,
+        ctx: discord.ApplicationContext,
+        choice: Option(str, "Your choice", choices=["rock", "paper", "scissors"])
+    ):
         bot_choice = random.choice(CHOICES)
-
-        # Determine winner
+        win_conditions = {"rock": "scissors", "scissors": "paper", "paper": "rock"}
         if choice == bot_choice:
             result = "It's a tie! 🤝"
-        elif (choice == "rock" and bot_choice == "scissors") or \
-             (choice == "paper" and bot_choice == "rock") or \
-             (choice == "scissors" and bot_choice == "paper"):
+        elif win_conditions[choice] == bot_choice:
             result = "You win! 🎉"
         else:
             result = "I win! 😎"
 
-        embed = discord.Embed(
-            title="Rock Paper Scissors",
-            color=discord.Color.purple()
-        )
+        embed = discord.Embed(title="Rock Paper Scissors", color=discord.Color.purple())
         embed.add_field(name="Your Choice", value=f"`{choice}`", inline=True)
         embed.add_field(name="My Choice", value=f"`{bot_choice}`", inline=True)
         embed.add_field(name="Result", value=result, inline=False)
+        await ctx.respond(embed=embed)
 
-        await interaction.response.send_message(embed=embed)
-
-    @commands.slash_command(name="flagguess", description="Start a competitive flag guessing game!")
-    async def flagguess(self, interaction: discord.Interaction):
-        game = FlagGame(interaction.channel)
+    @commands.slash_command(name="flagguess", description="Start a flag guessing game!")
+    async def flagguess(self, ctx: discord.ApplicationContext):
+        game = FlagGame(ctx.channel)
         game.generate_round()
-        
+
         embed = discord.Embed(
             title="🏳️ Flag Guessing Game",
             description="Guess the country of the flag shown below!",
             color=discord.Color.purple()
         )
-        
-        country_code = COUNTRIES[game.correct_answer]
-        flag_url = f"https://flagcdn.com/w320/{country_code.lower()}.png"
+        flag_url = f"https://flagcdn.com/w320/{COUNTRIES[game.correct_answer].lower()}.png"
         embed.set_image(url=flag_url)
-        
+
         view = FlagGuessView(game)
-        await interaction.response.send_message(embed=embed, view=view)
-        
+        await ctx.respond(embed=embed, view=view)
+
+# Add to bot
 async def setup(bot):
     await bot.add_cog(FunCommands(bot))
