@@ -14,7 +14,7 @@ REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
 SUBREDDITS = ["memes", "dankmemes", "wholesomememes"]
 JOKE_API_URL = "https://icanhazdadjoke.com/"
-KISS_GIF_URL = f"https://api.otakugifs.xyz/gif?reaction=kiss&id={str(random.randint(1, 1000000))}".json()
+KISS_GIF_URL = requests.get("https://api.otakugifs.xyz/gif?reaction=kiss&id={str(random.randint(1, 1000000))}").json()
 HEADERS = {"Accept": "application/json"}
 # Dictionary of countries and their codes
 COUNTRIES = {
