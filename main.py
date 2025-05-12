@@ -41,10 +41,15 @@ async def on_ready():
 async def load_cogs():
     print("Loading cogs...")
     await bot.add_cog(Ticket_System(bot))
+    print('loaded Ticket system')
     await bot.add_cog(Ticket_Command(bot))
+    print('loaded Ticket Commands')
     await bot.add_cog(FunCommands(bot))
+    print('loaded Fun Commands')
     await bot.add_cog(Utilities(bot))
+    print('loaded Utils')
     await bot.add_cog(WelcomeGoodbyeCog(bot))
+    print('loaded Welcomer')
     print("Cogs loaded.")
 
 
