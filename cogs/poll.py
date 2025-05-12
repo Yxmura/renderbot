@@ -150,7 +150,7 @@ class PollCog(commands.Cog):
         self.bot = bot
         self.check_polls.start()
 
-    @commands.slash_command(name="createpoll", description="Create a new poll")
+    @discord.slash_command(name="createpoll", description="Create a new poll")
     @app_commands.describe(
         title="The title of the poll",
         description="Description of the poll",
@@ -230,7 +230,7 @@ class PollCog(commands.Cog):
             ephemeral=True
         )
 
-    @commands.slash_command(name="setuppoll", description="Setup the poll system")
+    @discord.slash_command(name="setuppoll", description="Setup the poll system")
     @app_commands.default_permissions(administrator=True)
     async def setuppoll(
         self,

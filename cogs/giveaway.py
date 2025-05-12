@@ -194,7 +194,7 @@ class GiveawayCog(discord.Cog):
         self.bot = bot
         self.bot.loop.create_task(check_giveaways(bot))
 
-    @commands.slash_command(name="creategiveaway", description="Create a new giveaway")
+    @discord.slash_command(name="creategiveaway", description="Create a new giveaway")
     @app_commands.describe(
         channel="The channel to host the giveaway in",
         prize="The prize for the giveaway",
@@ -315,7 +315,7 @@ class GiveawayCog(discord.Cog):
             ephemeral=True
         )
 
-    @commands.slash_command(name="setupgiveaway", description="Setup the giveaway system")
+    @discord.slash_command(name="setupgiveaway", description="Setup the giveaway system")
     @app_commands.default_permissions(administrator=True)
     async def setupgiveaway(
         self,
