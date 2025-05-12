@@ -24,20 +24,15 @@ bot = commands.Bot(intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
-    richpresence.start()
-
-#Bot Status, Counting all opened Tickets in the Server. You need to add/change things if you have more or less than 2 Categories
-@tasks.loop(minutes=1)
-async def richpresence():
-    guild = bot.get_guild(GUILD_ID)
-    # You can adjust this to count tickets in specific categories if needed
-    ticket_count = sum(1 for channel in guild.channels if isinstance(channel, discord.TextChannel) and channel.category_id == CATEGORY_ID and channel.name.startswith("ticket-"))
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'you | /help'))
 
+@tasks.loop(minutes=1)
+def keel_alive_caller():
+    keep_alive()
 
 def main():
     print("Calling keep_alive()...")
-    keep_alive()
+    keep_alive_caller()
     print("keep_alive() done. Loading cogs...")
     try:
         print("Starting bot...")
