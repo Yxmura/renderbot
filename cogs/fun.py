@@ -310,7 +310,10 @@ class FunCommands(commands.Cog):
             color=Color.pink()
         ).set_image(url=kiss_gif)
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(
+            content=f"{interaction.user.mention} kisses {user.mention}!",
+            embed=embed
+        )
 
     @app_commands.command(name="coinflip", description="Flip a coin - heads or tails")
     async def coinflip(self, interaction: discord.Interaction):
