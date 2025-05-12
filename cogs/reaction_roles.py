@@ -137,7 +137,7 @@ class RoleView(discord.ui.View):
             for role_name, role_id in roles.items():
                 self.add_item(RoleButton(role_name, int(role_id)))
 
-@discord.slash_command(name="createrolemenu", description="Create a role selection menu")
+@commands.slash_command(name="createrolemenu", description="Create a role selection menu")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
     channel="The channel to send the role menu in",
@@ -226,7 +226,7 @@ async def createrolemenu(
         ephemeral=True
     )
 
-@discord.slash_command(name="deleterolemenu", description="Delete a role selection menu")
+@commands.slash_command(name="deleterolemenu", description="Delete a role selection menu")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
     message_id="The ID of the message containing the role menu"

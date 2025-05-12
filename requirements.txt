@@ -1,8 +1,7 @@
-﻿asyncio==3.4.3
-py-cord
+﻿py-cord==2.4.0
 chat-exporter
 pytz
-datetime
 flask
 requests
-dotenv
+python-dotenv
+discord.py
