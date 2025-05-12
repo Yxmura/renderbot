@@ -5,7 +5,7 @@ import json
 import os
 from typing import Optional
 
-REQUIRED_ROLE_ID: 1317607057687576696
+REQUIRED_ROLE_ID= 1317607057687576696
 
 class Utilities(commands.Cog):
     def __init__(self, bot: commands.Bot):

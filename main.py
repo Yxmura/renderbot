@@ -23,8 +23,7 @@ GUILD_ID = os.getenv('guild_id')
 GUILD_ID = config["guild_id"]
 CATEGORY_ID = config["category_id"]
 
-# Use the correct way to initialize the bot with intents
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all()) # Add a command_prefix, though not strictly needed for slash commands
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all()) 
 
 @bot.event
 async def on_ready():
