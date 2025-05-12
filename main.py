@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
+from cogs.utilities import Utilities
 from keep_alive import keep_alive
 from dotenv import load_dotenv
 import os
@@ -23,26 +24,18 @@ bot = commands.Bot(intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
-    # Ensure the cog setup functions are awaited
-    await bot.add_cog(Ticket_System(bot))
-    await bot.add_cog(Ticket_Command(bot))
-    await bot.add_cog(FunCommands(bot)) # Add the FunCommands cog
-    richpresence.start()
-
-
-#Bot Status, Counting all opened Tickets in the Server. You need to add/change things if you have more or less than 2 Categories
-@tasks.loop(minutes=1)
-async def richpresence():
-    guild = bot.get_guild(GUILD_ID)
-    # You can adjust this to count tickets in specific categories if needed
-    ticket_count = sum(1 for channel in guild.channels if isinstance(channel, discord.TextChannel) and channel.category_id == CATEGORY_ID and channel.name.startswith("ticket-"))
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'{ticket_count} open tickets | /help'))
-
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'you | /help'))
 
 def main():
+    print("Calling keep_alive()...")
     keep_alive()
+    print("keep_alive() done. Loading cogs...")
     try:
         print("Starting bot...")
+        bot.add_cog(Ticket_System(bot))
+        bot.add_cog(Ticket_Command(bot))
+        bot.add_cog(FunCommands(bot)) 
+        bot.add_cog(Utilities(bot))
         bot.run(BOT_TOKEN)
     except discord.errors.LoginFailure:
         print("Error: Invalid Discord token. Please check your .env file.")

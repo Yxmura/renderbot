@@ -40,9 +40,8 @@ class Ticket_Command(commands.Cog):
         conn.close()
 
     #Slash Command to show the Ticket Menu in the Ticket Channel only needs to be used once
-    @commands.slash_command(name="panel", description="Sends the ticket creation panel.")
+    @commands.slash_command(name="ticket", description="Sends the ticket creation panel.")
     @has_permissions(administrator=True)
-    @discord.app_commands.describe(date = "Date in YYYY-MM-DD format")
     async def ticket(self, ctx):
         self.channel = self.bot.get_channel(TICKET_CHANNEL)
         embed = discord.Embed(title=EMBED_TITLE, description=EMBED_DESCRIPTION, color=discord.colour.Color.purple())
