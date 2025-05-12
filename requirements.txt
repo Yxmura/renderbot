@@ -1,7 +1,6 @@
-﻿py-cord==2.4.0
+﻿discord.py
 chat-exporter
 pytz
 flask
 requests
 python-dotenv
-discord.py
