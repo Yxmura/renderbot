@@ -136,8 +136,8 @@ class FlagGame:
         self.scores = {}
         self.active = True
         self.guessed_users = set()
-        self.message = None # To store the game message for updating
-
+        self.message = None
+        
     def generate_round(self):
         self.correct_answer = random.choice(list(COUNTRIES.keys()))
 
@@ -185,10 +185,6 @@ class FlagGuessView(discord.ui.View):
                 f"✅ Correct! {interaction.user.mention} got it right!\n"
                 f"The flag was from {self.game.correct_answer}!"
             )
-            # Generate a new round immediately after a correct answer
-            await self.game.channel.send("**New Round!** Preparing the next flag...")
-            self.game.generate_round()
-            await self.send_new_round()
 
         else:
             await interaction.response.send_message("❌ Wrong answer! Try again!", ephemeral=True)
@@ -198,10 +194,6 @@ class FlagGuessView(discord.ui.View):
             await self.game.channel.send(
                 f"⏰ Time's up! The correct answer was {self.game.correct_answer}!"
             )
-            # Generate a new round on timeout
-            await self.game.channel.send("**New Round!** Preparing the next flag...")
-            self.game.generate_round()
-            await self.send_new_round()
 
     async def send_new_round(self):
         embed = Embed(
