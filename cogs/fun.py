@@ -257,7 +257,7 @@ class FunCommands(commands.Cog):
             embed = discord.Embed(
                 title="💋 Kiss",
                 description=f"{ctx.user.mention} kissed {user.mention}!",
-                color=discord.Color.pink()
+                color=discord.Color.red()
             )
             embed.set_image(url=KISS_GIF_URL)
             await ctx.respond(f"{ctx.user.mention} {user.mention}", embed=embed)
