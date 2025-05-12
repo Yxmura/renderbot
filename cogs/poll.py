@@ -8,12 +8,9 @@ import os
 from typing import List, Dict, Optional
 
 POLLS_FILE = "polls.json"
-# These should ideally be loaded from a config file or database on startup
-# For simplicity in this example, we'll use global variables for now,
-# but a more robust solution would load these in __init__
-POLL_CHANNEL_ID: Optional[int] = None
-POLL_ROLE_ID: Optional[int] = None
-REQUIRED_ROLE_ID: Optional[int] = None
+POLL_CHANNEL_ID= 1368282389608140822
+POLL_ROLE_ID=1368596260340240514
+REQUIRED_ROLE_ID=1317606142523998258
 
 class Poll:
     def __init__(
