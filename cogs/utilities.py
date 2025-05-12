@@ -7,7 +7,7 @@ class Utilities(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.slash_command(name="ping", description="Check the bot's latency")
+    @self.bot.slash_command(name="ping", description="Check the bot's latency")
     async def ping(self, ctx: discord.ApplicationContext):
         latency = round(self.bot.latency * 1000)
 
@@ -20,7 +20,7 @@ class Utilities(commands.Cog):
         await ctx.defer()
         await ctx.followup.send(embed=embed)
 
-    @commands.slash_command(
+    @self.bot.slash_command(
         name="embed",
         description="Create a custom embed message"
     )

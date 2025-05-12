@@ -198,7 +198,7 @@ class FunCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.slash_command(name="joke", description="Get a terrible dad joke.")
+    @self.bot.slash_command(name="joke", description="Get a terrible dad joke.")
     async def dadjoke(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
 
@@ -212,7 +212,7 @@ class FunCommands(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"Error fetching joke: {e}")
 
-    @commands.slash_command(name="remind", description="Set a reminder")
+    @self.bot.slash_command(name="remind", description="Set a reminder")
     @app_commands.describe(
         time="When to remind you (e.g., '1h', '30m', '1d')",
         message="What to remind you about"
@@ -274,7 +274,7 @@ class FunCommands(commands.Cog):
                 ephemeral=True
             )
 
-    @commands.slash_command(name="kiss", description="Kiss someone in the server")
+    @self.bot.slash_command(name="kiss", description="Kiss someone in the server")
     @app_commands.describe(
         user="The user to kiss"
     )
@@ -302,7 +302,7 @@ class FunCommands(commands.Cog):
             allowed_mentions=discord.AllowedMentions(users=True)
         )
 
-    @commands.slash_command(name="coinflip", description="Flip a coin - heads or tails")
+    @self.bot.slash_command(name="coinflip", description="Flip a coin - heads or tails")
     async def coinflip(self, interaction: discord.Interaction):
         result = random.choice(["Heads", "Tails"])
 
@@ -318,7 +318,7 @@ class FunCommands(commands.Cog):
             embed.set_thumbnail("https://i.ibb.co/ZTHtS5D/coin-tails.png")
         await interaction.response.send_message(embed=embed)
 
-    @commands.slash_command(name="meme", description="Get a random meme from Reddit")
+    @self.bot.slash_command(name="meme", description="Get a random meme from Reddit")
     async def meme(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
@@ -350,7 +350,7 @@ class FunCommands(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"Error fetching meme: {e}")
 
-    @commands.slash_command(name="rps", description="Play Rock Paper Scissors with the bot")
+    @self.bot.slash_command(name="rps", description="Play Rock Paper Scissors with the bot")
     @app_commands.describe(choice="Your choice: rock, paper, or scissors")
     @app_commands.choices(choice=[
         app_commands.Choice(name="rock", value="rock"),
@@ -380,7 +380,7 @@ class FunCommands(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @commands.slash_command(name="flagguess", description="Start a competitive flag guessing game!")
+    @self.bot.slash_command(name="flagguess", description="Start a competitive flag guessing game!")
     async def flagguess(self, interaction: discord.Interaction):
         game = FlagGame(interaction.channel)
         game.generate_round()
