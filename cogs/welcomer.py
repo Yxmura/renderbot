@@ -5,7 +5,7 @@ from discord.ext import commands
 import json
 import os
 
-WELCOME_GOODBYE_CHANNEL_ID: 1367574829208699020
+WELCOME_GOODBYE_CHANNEL_ID= 1367574829208699020
 
 class WelcomeGoodbyeCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
