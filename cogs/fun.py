@@ -14,7 +14,7 @@ REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
 SUBREDDITS = ["memes", "dankmemes", "wholesomememes"]
 JOKE_API_URL = "https://icanhazdadjoke.com/"
-KISS_GIF_URL = "https://api.otakugifs.xyz/gif?reaction=kiss&id=" + str(random.randint(1, 1000000))
+KISS_GIF_URL = f"https://api.otakugifs.xyz/gif?reaction=kiss&id={str(random.randint(1, 1000000))}".json()
 HEADERS = {"Accept": "application/json"}
 # Dictionary of countries and their codes
 COUNTRIES = {
@@ -317,8 +317,7 @@ class FunCommands(commands.Cog):
             color=discord.Color.pink()
         )
 
-        # Fetching the kiss gif URL
-        kiss_gif = KISS_GIF_URL
+        kiss_gif = KISS_GIF_URL['url']
         embed.set_image(url=kiss_gif)
 
         # Send the embed with the kiss gif
@@ -339,9 +338,9 @@ class FunCommands(commands.Cog):
         )
 
         if result == "Heads":
-            embed.set_thumbnail(url="https://i.ibb.co/gwM94r8/coin-heads.png")
+            embed.set_thumbnail("https://i.ibb.co/gwM94r8/coin-heads.png")
         else:
-            embed.set_thumbnail(url="https://i.ibb.co/ZTHtS5D/coin-tails.png")
+            embed.set_thumbnail("https://i.ibb.co/ZTHtS5D/coin-tails.png")
         await interaction.response.send_message(embed=embed)
 
     @commands.slash_command(name="meme", description="Get a random meme from Reddit")
