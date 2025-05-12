@@ -36,7 +36,9 @@ async def richpresence():
 
 
 def main():
+    print("Calling keep_alive()...")
     keep_alive()
+    print("keep_alive() done. Loading cogs...")
     try:
         print("Starting bot...")
         bot.add_cog(Ticket_System(bot))
