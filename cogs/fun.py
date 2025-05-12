@@ -357,7 +357,3 @@ class FunCommands(commands.Cog):
 
         view = FlagGuessView(game)
         await ctx.respond(embed=embed, view=view)
-
-# Add to bot
-async def setup(bot):
-    await bot.add_cog(FunCommands(bot))

@@ -72,6 +72,3 @@ class Utilities(commands.Cog):
                 f"❌ An error occurred: {e}",
                 ephemeral=True
             )
-
-async def setup(bot):
-    await bot.add_cog(Utilities(bot))

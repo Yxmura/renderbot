@@ -270,7 +270,3 @@ class PollCog(commands.Cog):
     @tasks.loop(seconds=60)
     async def check_polls(self):
         await check_polls(self.bot)
-
-# Setup function to add the cog to the bot
-async def setup(bot: commands.Bot):
-    bot.add_cog(PollCog(bot))

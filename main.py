@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
+from cogs.utilities import Utilities
 from keep_alive import keep_alive
 from dotenv import load_dotenv
 import os
@@ -26,7 +27,8 @@ async def on_ready():
     # Ensure the cog setup functions are awaited
     await bot.add_cog(Ticket_System(bot))
     await bot.add_cog(Ticket_Command(bot))
-    await bot.add_cog(FunCommands(bot)) # Add the FunCommands cog
+    await bot.add_cog(FunCommands(bot)) 
+    await bot.add_cog(Utilities(bot))
     richpresence.start()
 
 
