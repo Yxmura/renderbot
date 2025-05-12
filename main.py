@@ -32,7 +32,7 @@ async def richpresence():
     guild = bot.get_guild(GUILD_ID)
     # You can adjust this to count tickets in specific categories if needed
     ticket_count = sum(1 for channel in guild.channels if isinstance(channel, discord.TextChannel) and channel.category_id == CATEGORY_ID and channel.name.startswith("ticket-"))
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'{ticket_count} open tickets | /help'))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'you | /help'))
 
 
 def main():

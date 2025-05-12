@@ -267,17 +267,20 @@ class FunCommands(commands.Cog):
         ctx: discord.ApplicationContext,
         user: Option(discord.Member, "The user to kiss")
     ):
-        if user.id == ctx.user.id:
-            await ctx.respond("You can't kiss yourself!", ephemeral=True)
-            return
+        try:
+            if user.id == ctx.user.id:
+                await ctx.respond("You can't kiss yourself!", ephemeral=True)
+                return
 
-        embed = discord.Embed(
-            title="💋 Kiss",
-            description=f"{ctx.user.mention} kissed {user.mention}!",
-            color=discord.Color.pink()
-        )
-        embed.set_image(url=KISS_GIF_URL)
-        await ctx.respond(f"{ctx.user.mention} {user.mention}", embed=embed)
+            embed = discord.Embed(
+                title="💋 Kiss",
+                description=f"{ctx.user.mention} kissed {user.mention}!",
+                color=discord.Color.pink()
+            )
+            embed.set_image(url=KISS_GIF_URL)
+            await ctx.respond(f"{ctx.user.mention} {user.mention}", embed=embed)
+        except Exception as e:
+            await ctx.respond(f'an error occured: {e}')
 
     @commands.slash_command(name="coinflip", description="Flip a coin")
     async def coinflip(self, ctx: discord.ApplicationContext):
