@@ -130,6 +130,7 @@ class FlagGame:
         self.answered = False
         self.scores = {}
         self.active = True
+        self.guessed_users = set()
 
     def generate_round(self):
         self.correct_answer = random.choice(list(COUNTRIES.keys()))
@@ -159,9 +160,11 @@ class FlagGuessView(discord.ui.View):
             self.add_item(button)
 
     async def button_callback(self, interaction: discord.Interaction):
-        if self.game.answered:
-            await interaction.response.send_message("This round is already over!", ephemeral=True)
+        if interaction.user.id in self.game.guessed_users:
+            await interaction.response.send_message("❌ You've already guessed this round!", ephemeral=True)
             return
+
+        self.game.guessed_users.add(interaction.user.id)
 
         if interaction.data["custom_id"] == self.game.correct_answer:
             self.game.answered = True
@@ -170,31 +173,9 @@ class FlagGuessView(discord.ui.View):
                 self.game.scores[user_id] = 0
             self.game.scores[user_id] += 1
 
-            scoreboard = discord.Embed(
-                title="🏆 Scoreboard",
-                color=discord.Color.green()
-            )
-            
-            # Sort scores and get top 5
-            sorted_scores = sorted(
-                self.game.scores.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:5]
-            
-            for i, (user_id, score) in enumerate(sorted_scores, 1):
-                user = interaction.guild.get_member(user_id)
-                if user:
-                    scoreboard.add_field(
-                        name=f"{i}. {user.name}",
-                        value=f"Score: {score}",
-                        inline=False
-                    )
-
             await interaction.response.send_message(
                 f"✅ Correct! {interaction.user.mention} got it right!\n"
                 f"The flag was from {self.game.correct_answer}!",
-                embed=scoreboard
             )
         else:
             await interaction.response.send_message("❌ Wrong answer! Try again!", ephemeral=True)
@@ -204,6 +185,7 @@ class FlagGuessView(discord.ui.View):
             await self.game.channel.send(
                 f"⏰ Time's up! The correct answer was {self.game.correct_answer}!"
             )
+            self.game.guessed_users.clear()
             self.game.generate_round()
             new_view = FlagGuessView(self.game)
             await self.game.channel.send(
