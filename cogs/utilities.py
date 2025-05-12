@@ -7,7 +7,7 @@ class Utilities(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.slash_command(name="ping", description="Check the bot's latency")
+    @commands.slash_command(name="ping", description="Check the bot's latency")
     async def ping(self, ctx: discord.ApplicationContext):
         latency = round(self.bot.latency * 1000)
 
@@ -16,11 +16,13 @@ class Utilities(commands.Cog):
             description=f"Bot Latency: **{latency}ms**",
             color=discord.Color.purple()
         )
-        await ctx.respond(embed=embed)
+        # Defer to prevent timeout if latency is high
+        await ctx.defer()
+        await ctx.followup.send(embed=embed)
 
-    @discord.slash_command(
+    @commands.slash_command(
         name="embed",
-        description="Create a custom embed message (Requires a specific role)"
+        description="Create a custom embed message"
     )
     async def embed(
         self,
