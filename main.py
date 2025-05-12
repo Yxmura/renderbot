@@ -26,13 +26,9 @@ async def on_ready():
     print(f'Bot Started | {bot.user.name}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f'you | /help'))
 
-@tasks.loop(minutes=1)
-def keel_alive_caller():
-    keep_alive()
-
 def main():
     print("Calling keep_alive()...")
-    keep_alive_caller()
+    keep_alive()
     print("keep_alive() done. Loading cogs...")
     try:
         print("Starting bot...")
