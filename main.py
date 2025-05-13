@@ -7,7 +7,7 @@ from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
 from cogs.utilities import Utilities
-# Import the new welcomer cog
+from cogs.giveaway import GiveawayCog
 from cogs.welcomer import WelcomeGoodbyeCog
 from keep_alive import keep_alive
 from dotenv import load_dotenv
@@ -45,10 +45,14 @@ async def load_cogs():
     print('loaded Ticket Commands')
     await bot.add_cog(FunCommands(bot))
     print('loaded Fun Commands')
-    await bot.add_cog(Utilities(bot))
-    print('loaded Utils')
     await bot.add_cog(WelcomeGoodbyeCog(bot))
     print('loaded Welcomer')
+    await bot.add_cog(GiveawayCog(bot))
+    print('loaded Giveaway')
+    # this should allways be the last cog to load
+    # because it has the help command
+    await bot.add_cog(Utilities(bot))
+    print('loaded Utils')
     print("Cogs loaded.")
 
 

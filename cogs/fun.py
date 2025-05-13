@@ -13,6 +13,8 @@ from io import BytesIO
 
 REMINDERS_FILE = "reminders.json"
 CHOICES = ["rock", "paper", "scissors"]
+# Define SUBREDDITS here if you want to use them for the new meme API
+SUBREDDITS = ["memes", "dankmemes", "wholesomememes", "funny"]
 JOKE_API_URL = "https://icanhazdadjoke.com/"
 HEADERS = {"Accept": "application/json"}
 MEME_API_URL = "https://meme-api.com/gimme" # API for memes
@@ -107,33 +109,35 @@ class ReminderManager:
 
 reminder_manager = ReminderManager()
 
-# View for the "Play Again" button
-class PlayAgainView(ui.View):
+# View for the "Play Again" button for Flag Game
+class FlagGamePlayAgainView(ui.View):
     def __init__(self, cog: commands.Cog):
         super().__init__(timeout=300) # Timeout after 5 minutes of inactivity
         self.cog = cog # Keep a reference to the cog to access the game state
 
     @ui.button(label="Play Again", style=discord.ButtonStyle.green)
     async def play_again_button(self, interaction: discord.Interaction, button: ui.Button):
+        # Defer the interaction immediately
+        await interaction.response.defer()
+
         if interaction.channel_id in self.cog.active_flag_game_channels:
-             await interaction.response.send_message("A flag guessing game is already starting in this channel!", ephemeral=True)
+             await interaction.followup.send("A flag guessing game is already active in this channel!", ephemeral=True)
              return
 
         # Stop this view to disable the button
         self.stop()
         try:
-            await interaction.message.edit(view=None) # Remove the button from the previous message
+            # Try to remove the button from the message it was on
+            await interaction.message.edit(view=None)
         except:
             pass # Ignore if the message was deleted
 
-        await interaction.response.send_message("Starting a new flag guessing game...")
         # Use a task to start the new game to avoid blocking the interaction
-        asyncio.create_task(self.cog.start_new_flag_game(interaction.channel))
+        asyncio.create_task(self.cog.start_new_flag_game_from_button(interaction.channel))
 
-
-# Modified FlagGame for a single round with Play Again button
+# FlagGame for a single round with Play Again button
 class FlagGame:
-    def __init__(self, channel: discord.TextChannel, cog: commands.Cog):
+    def __init__(self, channel: discord.TextChannel, cog: "FunCommands"): # Use forward reference
         self.channel = channel
         self.cog = cog # Reference to the cog to access active_flag_game_channels
         self.current_flag = None
@@ -145,10 +149,12 @@ class FlagGame:
     def generate_round_data(self):
         self.correct_answer = random.choice(list(COUNTRIES.keys()))
 
+        # Ensure we get 4 unique wrong options
         wrong_options = random.sample(
             [country for country in COUNTRIES.keys() if country != self.correct_answer],
-            4
+            min(4, len(COUNTRIES) - 1) # Ensure we don't ask for more options than available
         )
+
 
         self.options = [self.correct_answer] + wrong_options
         random.shuffle(self.options)
@@ -162,20 +168,24 @@ class FlagGame:
             description="Guess the country of this flag:",
             color=Color.purple()
         )
-        code = COUNTRIES[self.correct_answer].lower()
-        embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
+        code = COUNTRIES.get(self.correct_answer, "").lower() # Use .get for safety
+        if code:
+            embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
+        else:
+            embed.description += "\n\n*(Could not load flag image)*"
+
 
         view = FlagGuessView(self) # Pass the game instance to the view
-        self.message = await interaction.response.send_message(embed=embed, view=view)
+        self.message = await interaction.followup.send(embed=embed, view=view) # Use followup.send after deferring
 
-    async def end_round(self, message: str):
+    async def end_round(self, message_content: str):
         if self.message:
             try:
                 # Disable the view on the original game message
                 await self.message.edit(view=None)
 
                 # Send a separate message with the game result and the Play Again button
-                await self.channel.send(message, view=PlayAgainView(self.cog))
+                await self.channel.send(content=message_content, view=FlagGamePlayAgainView(self.cog))
 
             except Exception as e:
                 print(f"Error ending flag game round or sending play again button: {e}")
@@ -183,6 +193,8 @@ class FlagGame:
                 # Remove the channel from active games when the round ends
                 if self.channel.id in self.cog.active_flag_game_channels:
                     self.cog.active_flag_game_channels.remove(self.channel.id)
+                # Ensure the game object can be garbage collected
+                del self.cog.active_flag_game_channels[self.channel.id] # Use del
 
 
 class FlagGuessView(ui.View):
@@ -202,8 +214,11 @@ class FlagGuessView(ui.View):
             self.add_item(button)
 
     async def button_callback(self, interaction: discord.Interaction):
+        # Defer the interaction to prevent timeout issues during processing
+        await interaction.response.defer()
+
         if self.game.answered: # Prevent multiple answers in a single-round game
-            await interaction.response.send_message("This round has already ended.", ephemeral=True)
+            await interaction.followup.send("This round has already ended.", ephemeral=True)
             return
 
         self.game.answered = True # Mark the round as answered
@@ -214,7 +229,7 @@ class FlagGuessView(ui.View):
                 f"The flag was from **{self.game.correct_answer}**!\n"
                 "Game Over!"
             )
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"✅ Correct! You got it!",
                 ephemeral=True # Send ephemeral response to the user first
             )
@@ -225,7 +240,7 @@ class FlagGuessView(ui.View):
                 f"The correct answer was **{self.game.correct_answer}**.\n"
                 "Game Over!"
             )
-            await interaction.response.send_message(
+            await interaction.followup.send(
                  f"❌ Wrong answer!",
                  ephemeral=True # Send ephemeral response to the user first
             )
@@ -245,6 +260,298 @@ class FlagGuessView(ui.View):
 
         self.stop() # Stop the view on timeout
 
+class RPSGame:
+    def __init__(self, player1: discord.Member, player2: Optional[discord.Member], channel: discord.TextChannel, cog: "FunCommands"):
+        self.player1 = player1
+        self.player2 = player2 # None if playing against bot
+        self.channel = channel
+        self.cog = cog # Reference to the cog to manage active games
+        self.round = 1
+        self.player1_score = 0
+        self.player2_score = 0 # Bot score is always 0
+        self.player1_choice: Optional[str] = None
+        self.player2_choice: Optional[str] = None
+        self.message: Optional[discord.Message] = None # Message with the buttons
+        self.active = True
+        self.choices_made_this_round: set[int] = set() # To track who has chosen in the current round
+
+    async def start_game(self, interaction: discord.Interaction):
+        self.cog.active_rps_games[self.channel.id] = self # Mark game as active
+        await interaction.followup.send("Starting Rock Paper Scissors!", ephemeral=True) # Use followup
+        await self.send_round_message()
+
+    async def send_round_message(self):
+        if not self.active: return # Don't send if game is inactive
+
+        self.choices_made_this_round.clear() # Clear choices for the new round
+        self.player1_choice = None
+        self.player2_choice = None
+
+        embed = Embed(
+            title=f"🪨📄✂️ Rock Paper Scissors - Round {self.round}/3",
+            description=f"Choose your move!\n"
+                        f"{self.player1.display_name}: {self.player1_score}\n"
+                        f"{self.player2.display_name if self.player2 else 'Bot'}: {self.player2_score}",
+            color=Color.blue()
+        )
+        view = RPSChoiceView(self)
+        if self.message:
+            try:
+                # Edit the previous message if it exists
+                self.message = await self.message.edit(embed=embed, view=view)
+            except:
+                 self.message = await self.channel.send(embed=embed, view=view) # Send new if edit fails
+        else:
+            self.message = await self.channel.send(embed=embed, view=view)
+
+    async def handle_choice(self, interaction: discord.Interaction, choice: str):
+        if not self.active: return # Don't handle if game is inactive
+
+        player_id = interaction.user.id
+
+        if player_id == self.player1.id:
+            if self.player1_choice is not None:
+                 await interaction.response.send_message("You have already made your choice for this round!", ephemeral=True)
+                 return
+            self.player1_choice = choice
+            self.choices_made_this_round.add(player_id)
+            await interaction.response.send_message(f"You chose {choice}!", ephemeral=True)
+        elif self.player2 and player_id == self.player2.id:
+             if self.player2_choice is not None:
+                 await interaction.response.send_message("You have already made your choice for this round!", ephemeral=True)
+                 return
+             self.player2_choice = choice
+             self.choices_made_this_round.add(player_id)
+             await interaction.response.send_message(f"You chose {choice}!", ephemeral=True)
+        else:
+            await interaction.response.send_message("You are not a participant in this game!", ephemeral=True)
+            return
+
+        await self.check_round_completion()
+
+    async def check_round_completion(self):
+        required_choices = 2 if self.player2 else 1 # 2 players or 1 player vs bot
+        if len(self.choices_made_this_round) == required_choices:
+            await self.resolve_round()
+
+    async def resolve_round(self):
+        if not self.active: return # Don't resolve if game is inactive
+
+        # If against bot, bot makes a random choice now that the player has chosen
+        if self.player2 is None:
+            self.player2_choice = random.choice(CHOICES)
+
+        result = "It's a tie! 🤝"
+        winner_mention = None
+
+        if self.player1_choice == self.player2_choice:
+            result = "It's a tie! 🤝"
+        elif (self.player1_choice == "rock" and self.player2_choice == "scissors") or \
+             (self.player1_choice == "paper" and self.player2_choice == "rock") or \
+             (self.player1_choice == "scissors" and self.player2_choice == "paper"):
+            result = f"{self.player1.display_name} wins this round! 🎉"
+            self.player1_score += 1
+            winner_mention = self.player1.mention
+        else:
+            player2_name = self.player2.display_name if self.player2 else 'Bot'
+            result = f"{player2_name} wins this round! 😎"
+            if self.player2:
+                 self.player2_score += 1
+                 winner_mention = self.player2.mention
+            # No winner_mention for bot
+
+        round_embed = Embed(
+            title=f"Round {self.round} Results",
+            description=f"{self.player1.display_name}: {self.player1_choice.capitalize()}\n"
+                        f"{self.player2.display_name if self.player2 else 'Bot'}: {self.player2_choice.capitalize()}\n"
+                        f"{result}",
+            color=Color.orange()
+        )
+        await self.channel.send(embed=round_embed)
+
+        self.round += 1
+
+        if self.round <= 3:
+            await self.send_round_message()
+        else:
+            await self.end_game()
+
+    async def on_timeout(self):
+        if self.active: # Only end if the game is still active
+             self.active = False # Mark as inactive on timeout
+             if self.message:
+                 try:
+                     await self.message.edit(view=None) # Disable buttons
+                 except:
+                     pass # Ignore if message was deleted
+
+             timeout_message = "Round timed out!"
+
+             # Determine winner based on score if timeout happens after some rounds
+             if self.round > 1:
+                 if self.player1_score > self.player2_score:
+                     timeout_message += f"\n{self.player1.display_name} wins the game!"
+                 elif self.player2_score > self.player1_score:
+                     timeout_message += f"\n{self.player2.display_name if self.player2 else 'Bot'} wins the game!"
+                 else:
+                     timeout_message += "\nThe game is a tie!"
+
+             else: # Timeout in the first round
+                  timeout_message = "Rock Paper Scissors game timed out before the first round could complete."
+
+
+             await self.channel.send(timeout_message)
+
+             if self.channel.id in self.cog.active_rps_games:
+                 del self.cog.active_rps_games[self.channel.id] # Mark game as inactive
+
+        self.stop() # Stop this view
+
+
+class RPSChoiceView(ui.View):
+    def __init__(self, game: RPSGame):
+        super().__init__(timeout=30) # Timeout for each round
+        self.game = game
+
+        for choice in CHOICES:
+            button = ui.Button(label=choice.capitalize(), style=discord.ButtonStyle.primary, custom_id=choice)
+            button.callback = self.button_callback
+            self.add_item(button)
+
+    async def button_callback(self, interaction: discord.Interaction):
+        # Defer the interaction
+        await interaction.response.defer()
+
+        if not self.game.active:
+             await interaction.followup.send("This game has ended.", ephemeral=True)
+             return
+
+        # Check if the user is one of the players
+        if interaction.user.id != self.game.player1.id and (self.game.player2 is None or interaction.user.id != self.game.player2.id):
+             await interaction.followup.send("You are not a participant in this game!", ephemeral=True)
+             return
+
+        choice = interaction.data['custom_id']
+
+        await self.game.handle_choice(interaction, choice)
+
+
+    async def on_timeout(self):
+        if self.game.active: # Only handle timeout if game is active
+            await self.game.on_timeout() # Call the game's timeout handler
+        self.stop() # Stop this view
+
+
+# View for accepting/declining an RPS challenge
+class RPSChallengeView(ui.View):
+    def __init__(self, challenger: discord.Member, challenged: discord.Member, cog: "FunCommands"):
+        super().__init__(timeout=60) # Timeout for accepting the challenge
+        self.challenger = challenger
+        self.challenged = challenged
+        self.cog = cog # Reference to the cog
+
+    @ui.button(label="Accept", style=discord.ButtonStyle.green)
+    async def accept_challenge(self, interaction: discord.Interaction, button: ui.Button):
+        # Defer the interaction
+        await interaction.response.defer()
+
+        if interaction.user.id != self.challenged.id:
+             await interaction.followup.send("This challenge is not for you!", ephemeral=True)
+             return
+
+        if interaction.channel.id in self.cog.active_rps_games and self.cog.active_rps_games[interaction.channel.id].active:
+             await interaction.followup.send("A Rock Paper Scissors game is already active in this channel!", ephemeral=True)
+             await interaction.message.edit(view=None) # Remove challenge buttons
+             self.stop()
+             return
+
+        await interaction.followup.send("Challenge accepted! Starting the game...", ephemeral=True)
+        try:
+            await interaction.message.edit(view=None) # Remove challenge buttons
+        except:
+            pass # Ignore if message was deleted
+
+        game = RPSGame(self.challenger, self.challenged, interaction.channel, self.cog)
+        await game.start_game(interaction) # Use the original interaction for followup
+
+        self.stop() # Stop this view
+
+    @ui.button(label="Decline", style=discord.ButtonStyle.red)
+    async def decline_challenge(self, interaction: discord.Interaction, button: ui.Button):
+        # Defer the interaction
+        await interaction.response.defer()
+
+        if interaction.user.id != self.challenged.id:
+             await interaction.followup.send("This challenge is not for you!", ephemeral=True)
+             return
+
+        await interaction.followup.send("Challenge declined.", ephemeral=False)
+        try:
+             await interaction.message.edit(view=None) # Remove challenge buttons
+        except:
+            pass # Ignore if message was deleted
+
+        self.stop() # Stop this view
+
+    async def on_timeout(self):
+        # Edit the message to show it timed out
+        try:
+            await self.message.edit(content="RPS challenge timed out.", view=None)
+        except:
+            pass # Ignore if message was deleted
+
+# Add after Chunk 3
+
+# New Fun Feature: Cat/Dog pictures
+class AnimalView(ui.View):
+    def __init__(self, animal_type: str, cog: "FunCommands"):
+        super().__init__(timeout=60) # Timeout for the view
+        self.animal_type = animal_type
+        self.cog = cog # Reference to the cog to access aiohttp session
+
+        refresh_button = ui.Button(label=f"More {animal_type.capitalize()}", style=discord.ButtonStyle.primary)
+        refresh_button.callback = self.refresh_callback
+        self.add_item(refresh_button)
+
+    async def refresh_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer() # Defer the interaction
+        try:
+            if self.animal_type == "cat":
+                url = "https://api.thecatapi.com/v1/images/search"
+            elif self.animal_type == "dog":
+                url = "https://api.thedogapi.com/v1/images/search"
+            else:
+                await interaction.followup.send("Invalid animal type.", ephemeral=True)
+                return
+
+            async with aiohttp.ClientSession() as session: # Use a new session for simplicity here
+                 async with session.get(url) as resp:
+                     if resp.status != 200:
+                         await interaction.followup.send(f"Couldn't fetch a {self.animal_type} picture right now.", ephemeral=True)
+                         return
+                     data = await resp.json()
+                     if not data or not data[0].get('url'):
+                         await interaction.followup.send(f"Couldn't get {self.animal_type} picture data.", ephemeral=True)
+                         return
+
+                     image_url = data[0]['url']
+
+                     embed = Embed(title=f"Random {self.animal_type.capitalize()}!", color=Color.blue())
+                     embed.set_image(url=image_url)
+
+                     await interaction.edit_original_response(embed=embed, view=self) # Edit the original message
+
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+
+    async def on_timeout(self):
+        if self.message:
+            try:
+                await self.message.edit(view=None) # Disable the button on timeout
+            except:
+                pass # Ignore if message was deleted
+
+# Add after all imports and other class definitions (Reminder, FlagGame, RPSGame, Views)
 
 class FunCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -252,10 +559,25 @@ class FunCommands(commands.Cog):
         self.check_reminders.start()
         # Set to track channels with an active flag game
         self.active_flag_game_channels: set[int] = set()
+        self.active_rps_games: Dict[int, RPSGame] = {}
+        # Add aiohttp session to the cog for reuse
+        self.session: Optional[aiohttp.ClientSession] = None
 
 
-    def cog_unload(self):
+    async def cog_load(self):
+        print("FunCog loading...")
+        self.session = aiohttp.ClientSession()
+
+    async def cog_unload(self):
+        print("FunCog unloading...")
         self.check_reminders.cancel()
+        # Close the aiohttp session
+        if self.session:
+            await self.session.close()
+        # Attempt to end active games gracefully
+        for game in list(self.active_rps_games.values()):
+             await game.end_game()
+        # Flag game ends automatically after one round or timeout
 
     @tasks.loop(minutes=1)
     async def check_reminders(self):
@@ -283,14 +605,13 @@ class FunCommands(commands.Cog):
     async def dadjoke(self, interaction: discord.Interaction):
         await interaction.response.defer()
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(JOKE_API_URL, headers=HEADERS) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        joke = data.get("joke")
-                        await interaction.followup.send(joke)
-                    else:
-                        await interaction.followup.send("Sorry, I couldn't fetch a dad joke right now.")
+            async with self.session.get(JOKE_API_URL, headers=HEADERS) as resp: # Use the cog's session
+                if resp.status != 200:
+                    await interaction.followup.send("Sorry, I couldn't fetch a dad joke right now.")
+                    return
+                data = await resp.json()
+                joke = data.get("joke")
+                await interaction.followup.send(joke)
         except Exception as e:
             await interaction.followup.send(f"Error fetching joke: {e}")
 
@@ -329,13 +650,12 @@ class FunCommands(commands.Cog):
             await interaction.response.send_message("You can't kiss yourself!", ephemeral=True)
             return
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.otakugifs.xyz/gif?reaction=kiss") as resp:
-                if resp.status != 200:
-                    await interaction.response.send_message("Couldn't fetch a kiss gif!", ephemeral=True)
-                    return
-                gif_data = await resp.json()
-                kiss_gif = gif_data['url']
+        async with self.session.get("https://api.otakugifs.xyz/gif?reaction=kiss") as resp: # Use the cog's session
+            if resp.status != 200:
+                await interaction.response.send_message("Couldn't fetch a kiss gif!", ephemeral=True)
+                return
+            gif_data = await resp.json()
+            kiss_gif = gif_data['url']
 
         embed = Embed(
             title="💋 Kiss",
@@ -367,52 +687,68 @@ class FunCommands(commands.Cog):
         await interaction.response.defer() # Defer the interaction
 
         try:
-            async with aiohttp.ClientSession() as session:
-                api_url = MEME_API_URL
+            api_url = MEME_API_URL
 
-                async with session.get(api_url) as resp:
-                    if resp.status != 200:
-                        await interaction.followup.send("Couldn't fetch a meme right now from the API.")
-                        return
+            async with self.session.get(api_url) as resp: # Use the cog's session
+                if resp.status != 200:
+                    await interaction.followup.send("Couldn't fetch a meme right now from the API.")
+                    return
 
-                    data = await resp.json()
+                data = await resp.json()
 
-                    # Check if the API returned a meme
-                    if not data or not data.get('url'):
-                         await interaction.followup.send("Couldn't get meme data from the API.")
-                         return
+                # Check if the API returned a meme
+                if not data or not data.get('url'):
+                     await interaction.followup.send("Couldn't get meme data from the API.")
+                     return
 
-                    meme_title = data.get('title', 'No Title')
-                    meme_image_url = data.get('url')
+                meme_title = data.get('title', 'No Title')
+                meme_image_url = data.get('url')
+                meme_subreddit = data.get('subreddit', 'Unknown Subreddit') # Get subreddit if available
 
-                    embed = Embed(title=meme_title, color=Color.orange())
-                    embed.set_image(url=meme_image_url)
 
-                    await interaction.followup.send(embed=embed)
+                embed = Embed(title=meme_title, color=Color.orange())
+                embed.set_image(url=meme_image_url)
+                if meme_subreddit != 'Unknown Subreddit':
+                    embed.set_footer(text=f"From r/{meme_subreddit}")
+
+
+                await interaction.followup.send(embed=embed)
 
         except Exception as e:
             await interaction.followup.send(f"Failed to fetch meme: {e}")
 
-    @app_commands.command(name="rps", description="Play Rock Paper Scissors with the bot")
-    @app_commands.describe(choice="Your choice: rock, paper, or scissors")
-    @app_commands.choices(choice=[
-        app_commands.Choice(name="rock", value="rock"),
-        app_commands.Choice(name="paper", value="paper"),
-        app_commands.Choice(name="scissors", value="scissors"),
-    ])
-    async def rps(self, interaction: discord.Interaction, choice: app_commands.Choice[str]):
-        player_choice = choice.value
-        bot_choice = random.choice(CHOICES)
-        result = "It's a tie! 🤝" if player_choice == bot_choice else (
-            "You win! 🎉" if (player_choice, bot_choice) in [("rock", "scissors"), ("paper", "rock"), ("scissors", "paper")]
-            else "I win! 😎"
-        )
+    @app_commands.command(name="rps", description="Play Rock Paper Scissors against the bot or another user.")
+    @app_commands.describe(opponent="The user you want to play against (leave blank for bot)")
+    async def rps(self, interaction: discord.Interaction, opponent: Optional[discord.Member] = None):
+        if interaction.channel_id in self.active_rps_games and self.active_rps_games[interaction.channel_id].active:
+             await interaction.response.send_message("A Rock Paper Scissors game is already active in this channel!", ephemeral=True)
+             return
 
-        embed = Embed(title="Rock Paper Scissors", color=Color.purple())
-        embed.add_field(name="You", value=player_choice)
-        embed.add_field(name="Me", value=bot_choice)
-        embed.add_field(name="Result", value=result)
-        await interaction.response.send_message(embed=embed)
+        player1 = interaction.user
+        player2 = opponent
+
+        if player2 and player2.bot:
+             await interaction.response.send_message("You can't play against a bot opponent.", ephemeral=True)
+             return
+
+        if player2 and player1.id == player2.id:
+             await interaction.response.send_message("You can't play against yourself!", ephemeral=True)
+             return
+
+        # Defer the interaction early
+        await interaction.response.defer()
+
+        # If against another user, require their confirmation
+        if player2:
+            confirmation_view = RPSChallengeView(player1, player2, self)
+            # Send the challenge message as a followup
+            await interaction.followup.send(f"{player2.mention}, {player1.mention} wants to play Rock Paper Scissors against you! Do you accept?", view=confirmation_view)
+        else:
+            # Start bot game directly
+            game = RPSGame(player1, None, interaction.channel, self)
+            # Start the game using the original interaction (which was deferred)
+            await game.start_game(interaction)
+
 
     @app_commands.command(name="flagguess", description="Start a flag guessing game")
     async def flagguess(self, interaction: discord.Interaction):
@@ -454,13 +790,107 @@ class FunCommands(commands.Cog):
             description="Guess the country of this flag:",
             color=Color.purple()
         )
-        code = COUNTRIES[game.correct_answer].lower()
-        embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
+        code = COUNTRIES.get(game.correct_answer, "").lower()
+        if code:
+            embed.set_image(url=f"https://flagcdn.com/w320/{code}.png")
+        else:
+             embed.description += "\n\n*(Could not load flag image)*"
+
 
         view = FlagGuessView(game)
         game.message = await channel.send(embed=embed, view=view)
 
+    @app_commands.command(name="8ball", description="Ask the Magic 8-Ball a question.")
+    @app_commands.describe(question="The question you want to ask the 8-Ball")
+    async def eightball(self, interaction: discord.Interaction, question: str):
+        responses = [
+            "It is certain.", "It is decidedly so.", "Without a doubt.", "Yes, definitely.",
+            "You may rely on it.", "As I see it, yes.", "Most likely.", "Outlook good.",
+            "Yes.", "Signs point to yes.", "Reply hazy, try again.", "Cannot predict now.",
+            "Concentrate and ask again.", "Don't count on it.", "My reply is no.", "My sources say no.",
+            "Outlook not so good.", "Very doubtful.", "Better not tell you now.", "Ask again later." # Added missing responses
+        ]
+        answer = random.choice(responses)
 
-# Setup function to add the cog to the bot
-async def setup(bot: commands.Bot):
-    await bot.add_cog(FunCommands(bot))
+        embed = Embed(
+            title="🎱 Magic 8-Ball",
+            description=f"**Question:** {question}\n**Answer:** {answer}",
+            color=Color.dark_purple()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="dice", description="Roll one or more dice.")
+    @app_commands.describe(
+        number_of_dice="The number of dice to roll (default is 1, max 6)",
+        sides="The number of sides on each die (default is 6, max 100)"
+    )
+    async def dice(
+        self,
+        interaction: discord.Interaction,
+        number_of_dice: app_commands.Range[int, 1, 6] = 1,
+        sides: app_commands.Range[int, 1, 100] = 6
+    ):
+        if number_of_dice < 1 or sides < 1:
+            await interaction.response.send_message("Please provide valid numbers for dice and sides.", ephemeral=True)
+            return
+
+        results = [random.randint(1, sides) for _ in range(number_of_dice)]
+        total = sum(results)
+
+        embed = Embed(
+            title="🎲 Dice Roll",
+            description=f"Rolling {number_of_dice}d{sides}...",
+            color=Color.blue()
+        )
+        embed.add_field(name="Results", value=", ".join(map(str, results)))
+        embed.add_field(name="Total", value=total, inline=False)
+
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="cat", description="Get a random cat picture!")
+    async def cat(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            url = "https://api.thecatapi.com/v1/images/search"
+            async with self.session.get(url) as resp: # Use the cog's session
+                if resp.status != 200:
+                    await interaction.followup.send("Couldn't fetch a cat picture right now.")
+                    return
+                data = await resp.json()
+                if not data or not data[0].get('url'):
+                    await interaction.followup.send("Couldn't get cat picture data.")
+                    return
+
+                image_url = data[0]['url']
+
+                embed = Embed(title="Random Cat!", color=Color.blue())
+                embed.set_image(url=image_url)
+
+                await interaction.followup.send(embed=embed, view=AnimalView("cat", self)) # Add the view
+
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+
+    @app_commands.command(name="dog", description="Get a random dog picture!")
+    async def dog(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            url = "https://api.thedogapi.com/v1/images/search"
+            async with self.session.get(url) as resp: # Use the cog's session
+                if resp.status != 200:
+                    await interaction.followup.send("Couldn't fetch a dog picture right now.")
+                    return
+                data = await resp.json()
+                if not data or not data[0].get('url'):
+                    await interaction.followup.send("Couldn't get dog picture data.")
+                    return
+
+                image_url = data[0]['url']
+
+                embed = Embed(title="Random Dog!", color=Color.blue())
+                embed.set_image(url=image_url)
+
+                await interaction.followup.send(embed=embed, view=AnimalView("dog", self)) # Add the view
+
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
