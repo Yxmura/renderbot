@@ -1,4 +1,3 @@
-import asyncio
 import discord
 from discord import app_commands, Embed, Color, ui
 from discord.ext import commands, tasks
@@ -6,6 +5,8 @@ import json
 import os
 from typing import Optional, Dict, List, Any
 from dotenv import load_dotenv # Keep dotenv here for config loading
+import asyncio # Import asyncio
+
 
 # Load environment variables specific to utilities if needed (or keep it in main)
 # load_dotenv()
@@ -47,47 +48,68 @@ class HelpPaginatorView(ui.View):
 
 
     async def go_previous(self, interaction: discord.Interaction):
-        await interaction.response.defer() # Defer to avoid interaction failed
-        self.current_index -= 1
-        self.update_buttons()
-        await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        try:
+            await interaction.response.defer() # Defer to avoid interaction failed
+            self.current_index -= 1
+            self.update_buttons()
+            await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        except Exception as e:
+            print(f"Error in HelpPaginatorView go_previous: {e}")
+            # Consider sending an ephemeral error message to the user
 
     async def go_next(self, interaction: discord.Interaction):
-        await interaction.response.defer() # Defer to avoid interaction failed
-        self.current_index += 1
-        self.update_buttons()
-        await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        try:
+            await interaction.response.defer() # Defer to avoid interaction failed
+            self.current_index += 1
+            self.update_buttons()
+            await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        except Exception as e:
+            print(f"Error in HelpPaginatorView go_next: {e}")
+            # Consider sending an ephemeral error message to the user
 
     async def jump_to_page(self, interaction: discord.Interaction):
-        await interaction.response.defer() # Defer to avoid interaction failed
-        selected_page_index = int(interaction.data['values'][0])
-        self.current_index = selected_page_index
-        self.update_buttons()
-        await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        try:
+            await interaction.response.defer() # Defer to avoid interaction failed
+            selected_page_index = int(interaction.data['values'][0])
+            self.current_index = selected_page_index
+            self.update_buttons()
+            await interaction.edit_original_response(embed=self.embeds[self.current_index], view=self)
+        except Exception as e:
+            print(f"Error in HelpPaginatorView jump_to_page: {e}")
+            # Consider sending an ephemeral error message to the user
 
 
     async def on_timeout(self):
+        print("HelpPaginatorView timed out.")
         if self.message:
             try:
                 await self.message.edit(view=None) # Remove buttons on timeout
             except:
-                pass
+                pass # Ignore if message was deleted
 
 
 class Utilities(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.load_config() # Load configuration on cog initialization
-        # Store categorized commands
-        self.categorized_commands: Dict[str, List[app_commands.AppCommand]] = {}
+        print("Utilities __init__ called") # Debug print
+        try:
+            self.load_config() # Load configuration on cog initialization
+            # Store categorized commands
+            self.categorized_commands: Dict[str, List[app_commands.AppCommand]] = {}
+            print("Utilities __init__ finished successfully.") # Debug print
+        except Exception as e:
+            print(f"Error during Utilities __init__: {e}")
+            # Consider raising the exception to see it fail explicitly in main
+            # raise e
 
 
     def load_config(self):
+        print("Utilities load_config called.") # Debug print
         global UTILITIES_REQUIRED_ROLE_ID
-        # Load the required role ID from a persistent config file if it exists
-        if os.path.exists("utilities_config.json"):
-            with open("utilities_config.json", "r") as f:
-                try:
+        try:
+            # Load the required role ID from a persistent config file if it exists
+            if os.path.exists("utilities_config.json"):
+                with open("utilities_config.json", "r") as f:
                     config_data = json.load(f)
                     # Only update if the key exists in the config file
                     if 'required_role_id' in config_data:
@@ -102,33 +124,43 @@ class Utilities(commands.Cog):
                              print("Invalid value for required_role_id in config. Using default.")
                              UTILITIES_REQUIRED_ROLE_ID = 1317607057687576696 # Reset to default if invalid
 
-
-                except json.JSONDecodeError:
-                     print("Error loading utilities_config.json. Using default value for REQUIRED_ROLE_ID.")
-        else:
-             # Create a default config file if it doesn't exist
-             self.save_config()
+            print("Utilities load_config finished.") # Debug print
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+             print(f"Error loading utilities_config.json: {e}. Using default value for REQUIRED_ROLE_ID.")
+             UTILITIES_REQUIRED_ROLE_ID = 1317607057687576696 # Ensure default is set on error
+        except Exception as e:
+             print(f"Unexpected error in Utilities load_config: {e}")
+             # Consider raising if this error should prevent the cog from loading
 
 
     def save_config(self):
-         config_data = {
-             "required_role_id": UTILITIES_REQUIRED_ROLE_ID
-         }
-         with open("utilities_config.json", "w") as f:
-             json.dump(config_data, f, indent=4)
+         print("Utilities save_config called.") # Debug print
+         try:
+             config_data = {
+                 "required_role_id": UTILITIES_REQUIRED_ROLE_ID
+             }
+             with open("utilities_config.json", "w") as f:
+                 json.dump(config_data, f, indent=4)
+             print("Utilities save_config finished.") # Debug print
+         except Exception as e:
+             print(f"Error saving utilities_config.json: {e}")
+
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print("UtilitiesCog ready.")
+        print("UtilitiesCog ready listener called.") # Debug print
         # Categorize commands when the bot is ready
         # Delay categorization slightly to ensure other cogs are loaded
         # Increased delay as command fetching might take a bit after sync
         await asyncio.sleep(5)
+        print("UtilitiesCog ready listener after sleep, calling categorize_commands.") # Debug print
         await self.categorize_commands()
+        print("UtilitiesCog ready listener finished.") # Debug print
 
 
     async def categorize_commands(self):
         """Categorizes slash commands by their cog."""
+        print("categorize_commands called.") # Debug print
         await self.bot.wait_until_ready() # Ensure bot is ready and commands are synced
         self.categorized_commands.clear() # Clear previous categorization
 
@@ -193,14 +225,21 @@ class Utilities(commands.Cog):
 
     @app_commands.command(name="ping", description="Check the bot's latency")
     async def ping(self, interaction: discord.Interaction):
-        latency = round(self.bot.latency * 1000)
+        try:
+            latency = round(self.bot.latency * 1000)
 
-        embed = Embed(
-            title="🏓 Pong!",
-            description=f"Bot Latency: **{latency}ms**",
-            color=Color.purple()
-        )
-        await interaction.response.send_message(embed=embed)
+            embed = Embed(
+                title="🏓 Pong!",
+                description=f"Bot Latency: **{latency}ms**",
+                color=Color.purple()
+            )
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+             print(f"Error in ping command: {e}")
+             try:
+                 await interaction.response.send_message("An error occurred while fetching latency.", ephemeral=True)
+             except:
+                 pass
 
 
     @app_commands.command(
@@ -223,66 +262,75 @@ class Utilities(commands.Cog):
         color: Optional[str] = "0000FF", # Use default directly in function signature
         footer: Optional[str] = None
     ):
-        if interaction.guild is None:
-             await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
-             return
+        try:
+            if interaction.guild is None:
+                 await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+                 return
 
-        # Check if the user has the required role
-        if UTILITIES_REQUIRED_ROLE_ID is not None:
-            required_role = interaction.guild.get_role(UTILITIES_REQUIRED_ROLE_ID)
-            if required_role and required_role not in interaction.user.roles:
+            # Check if the user has the required role
+            if UTILITIES_REQUIRED_ROLE_ID is not None:
+                required_role = interaction.guild.get_role(UTILITIES_REQUIRED_ROLE_ID)
+                if required_role and required_role not in interaction.user.roles:
+                    await interaction.response.send_message(
+                        f"You do not have the {required_role.name} role to use this command.",
+                        ephemeral=True
+                    )
+                    return
+            elif UTILITIES_REQUIRED_ROLE_ID is None and interaction.user.guild_permissions.administrator:
+                 # Allow administrators to use if no required role is set
+                 pass
+            elif UTILITIES_REQUIRED_ROLE_ID is None:
+                 await interaction.response.send_message(
+                     "The utilities commands need to be configured by an administrator first using `/setutilitiesrole`.",
+                     ephemeral=True
+                 )
+                 return
+
+
+            try:
+                # Safely handle the color conversion
+                color_int = int(color.replace("#", ""), 16)
+                # Use discord.Color constructor directly with the integer
+                embed_color = Color(color_int)
+            except ValueError:
                 await interaction.response.send_message(
-                    f"You do not have the {required_role.name} role to use this command.",
+                    "❌ Invalid color code! Please use a valid hex code (e.g., `FF0000` for red).",
                     ephemeral=True
                 )
                 return
-        elif UTILITIES_REQUIRED_ROLE_ID is None and interaction.user.guild_permissions.administrator:
-             # Allow administrators to use if no required role is set
-             pass
-        elif UTILITIES_REQUIRED_ROLE_ID is None:
-             await interaction.response.send_message(
-                 "The utilities commands need to be configured by an administrator first using `/setutilitiesrole`.",
-                 ephemeral=True
-             )
-             return
 
-
-        try:
-            # Safely handle the color conversion
-            color_int = int(color.replace("#", ""), 16)
-            # Use discord.Color constructor directly with the integer
-            embed_color = Color(color_int)
-        except ValueError:
-            await interaction.response.send_message(
-                "❌ Invalid color code! Please use a valid hex code (e.g., `FF0000` for red).",
-                ephemeral=True
+            embed = Embed(
+                title=title,
+                description=description,
+                color=embed_color
             )
-            return
+            if footer:
+                embed.set_footer(text=footer)
 
-        embed = Embed(
-            title=title,
-            description=description,
-            color=embed_color
-        )
-        if footer:
-            embed.set_footer(text=footer)
-
-        try:
-            await channel.send(embed=embed)
-            await interaction.response.send_message(
-                f"✅ Embed sent to {channel.mention}!",
-                ephemeral=True
-            )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                 f"❌ I don't have permission to send messages in {channel.mention}.",
-                 ephemeral=True
-             )
+            try:
+                await channel.send(embed=embed)
+                await interaction.response.send_message(
+                    f"✅ Embed sent to {channel.mention}!",
+                    ephemeral=True
+                )
+            except discord.Forbidden:
+                await interaction.response.send_message(
+                     f"❌ I don't have permission to send messages in {channel.mention}.",
+                     ephemeral=True
+                 )
+            except Exception as e:
+                print(f"Error sending embed message: {e}")
+                await interaction.response.send_message(
+                    f"❌ An error occurred while sending the embed: {e}",
+                    ephemeral=True
+                )
         except Exception as e:
-            await interaction.response.send_message(
-                f"❌ An error occurred while sending the embed: {e}",
-                ephemeral=True
-            )
+            print(f"Error in embed command: {e}")
+            try:
+                 await interaction.response.send_message("An unexpected error occurred with the embed command.", ephemeral=True)
+            except:
+                 pass
+
 
     @app_commands.command(name="setutilitiesrole", description="Set the role required to use utility commands like /embed")
     @app_commands.default_permissions(administrator=True)
@@ -294,83 +342,102 @@ class Utilities(commands.Cog):
         interaction: discord.Interaction,
         required_role: discord.Role
     ):
-        global UTILITIES_REQUIRED_ROLE_ID
-        UTILITIES_REQUIRED_ROLE_ID = required_role.id
-        self.save_config()
+        try:
+            global UTILITIES_REQUIRED_ROLE_ID
+            UTILITIES_REQUIRED_ROLE_ID = required_role.id
+            self.save_config()
 
-        embed = Embed(
-            title="🛠️ Utilities Role Set",
-            description=f"The role required to use utility commands is now: {required_role.mention}",
-            color=Color.green()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            embed = Embed(
+                title="🛠️ Utilities Role Set",
+                description=f"The role required to use utility commands is now: {required_role.mention}",
+                color=Color.green()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+             print(f"Error in setutilitiesrole command: {e}")
+             try:
+                  await interaction.response.send_message("An error occurred while setting the utilities role.", ephemeral=True)
+             except:
+                  pass
+
 
     @app_commands.command(name="help", description="Get a list of all available commands.")
     async def help(self, interaction: discord.Interaction):
         await interaction.response.defer() # Defer the interaction as command loading can take time
 
-        # Ensure commands are categorized
-        if not self.categorized_commands:
-            print("Categorized commands not populated, attempting categorization...")
-            await self.categorize_commands()
-        else:
-             print("Using cached categorized commands.")
+        try:
+            # Ensure commands are categorized
+            if not self.categorized_commands:
+                print("Categorized commands not populated, attempting categorization from help command.") # Debug print
+                await self.categorize_commands()
+            else:
+                 print("Using cached categorized commands for help command.") # Debug print
 
 
-        if not self.categorized_commands:
-            await interaction.followup.send("Could not load commands. Please try again later.", ephemeral=True)
-            return
+            if not self.categorized_commands:
+                await interaction.followup.send("Could not load commands for the help menu. Please try again later.", ephemeral=True)
+                return
 
-        embeds = []
-        # Sort cog names alphabetically, putting "No Cog" (if exists) first
-        sorted_cog_names = sorted(self.categorized_commands.keys())
-        if "No Cog" in sorted_cog_names:
-            sorted_cog_names.insert(0, sorted_cog_names.pop(sorted_cog_names.index("No Cog")))
+            embeds = []
+            # Sort cog names alphabetically, putting "No Cog" (if exists) first
+            sorted_cog_names = sorted(self.categorized_commands.keys())
+            if "No Cog" in sorted_cog_names:
+                sorted_cog_names.insert(0, sorted_cog_names.pop(sorted_cog_names.index("No Cog")))
 
 
-        for cog_name in sorted_cog_names:
-            commands_list = self.categorized_commands[cog_name]
-            if not commands_list: continue # Skip empty categories
+            for cog_name in sorted_cog_names:
+                commands_list = self.categorized_commands[cog_name]
+                if not commands_list: continue # Skip empty categories
 
-            embed = Embed(
-                title=f"Bot Commands - {cog_name}",
-                description="Here are the available commands in this category:",
-                color=Color.blue()
-            )
-
-            # Sort commands alphabetically
-            sorted_commands = sorted(commands_list, key=lambda cmd: cmd.name)
-
-            for command in sorted_commands:
-                # Get command parameters and descriptions
-                params_str = ""
-                if command.parameters:
-                    params_str = " " + " ".join(
-                        f"<{param.name}>" for param in command.parameters
-                    )
-
-                embed.add_field(
-                    name=f"/{command.name}{params_str}",
-                    value=command.description or "No description provided.",
-                    inline=False
+                embed = Embed(
+                    title=f"Bot Commands - {cog_name}",
+                    description="Here are the available commands in this category:",
+                    color=Color.blue()
                 )
 
-            embeds.append(embed)
+                # Sort commands alphabetically
+                sorted_commands = sorted(commands_list, key=lambda cmd: cmd.name)
 
-        if not embeds:
-            await interaction.followup.send("No commands found.", ephemeral=True)
-            return
+                for command in sorted_commands:
+                    # Get command parameters and descriptions
+                    params_str = ""
+                    if command.parameters:
+                        params_str = " " + " ".join(
+                            f"<{param.name}>" for param in command.parameters
+                        )
 
-        # Send the first embed with the paginator view
-        view = HelpPaginatorView(embeds, 0)
-        # The interaction was deferred, so use followup.send
-        view.message = await interaction.followup.send(embed=embeds[0], view=view)
+                    embed.add_field(
+                        name=f"/{command.name}{params_str}",
+                        value=command.description or "No description provided.",
+                        inline=False
+                    )
+
+                embeds.append(embed)
+
+            if not embeds:
+                await interaction.followup.send("No commands found to display in help.", ephemeral=True)
+                return
+
+            # Send the first embed with the paginator view
+            view = HelpPaginatorView(embeds, 0)
+            # The interaction was deferred, so use followup.send
+            view.message = await interaction.followup.send(embed=embeds[0], view=view)
+
+        except Exception as e:
+            print(f"Error in help command: {e}")
+            try:
+                 await interaction.followup.send("An unexpected error occurred while generating the help menu.", ephemeral=True)
+            except:
+                 pass
 
 
 # Setup function for the Utilities cog
 async def setup(bot: commands.Bot):
-    print("Utilities cog setup called")
-    await bot.add_cog(Utilities(bot))
-    print("Utilities cog setup finished")
-
-# --- END: Utilities Cog and its Setup ---
+    print("Utilities cog setup called from file.") # Debug print
+    try:
+        await bot.add_cog(Utilities(bot))
+        print("Utilities cog setup finished successfully.") # Debug print
+    except Exception as e:
+        print(f"Error adding Utilities cog: {e}")
+        # Consider re-raising the exception if this should be a fatal error
+        # raise e
