@@ -1,6 +1,7 @@
-﻿discord.py
+discord.py
 chat-exporter
 pytz
 flask
 requests
 python-dotenv
+datetime
