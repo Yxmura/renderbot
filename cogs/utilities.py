@@ -701,7 +701,7 @@ class MusicCopyrightCog(commands.Cog):
             await interaction.followup.send(error_message, ephemeral=True)
 
 
-        def get_video_info_blocking(self, video_url: str) -> Dict[str, Any]:
+    def get_video_info_blocking(self, video_url: str) -> Dict[str, Any]:
         if not youtube_client:
              raise Exception("YouTube API client is not initialized.")
 
@@ -1080,7 +1080,7 @@ class MusicCopyrightCog(commands.Cog):
             if "quota" in str(e).lower():
                  error_message = "YouTube API quota exceeded. Please try again later."
             print(f"Error in get_channel_stats_button_callback: {e}") # Log the error
-            await interaction.followup.send(error_message, ephemeral=true)
+            await interaction.followup.send(error_message, ephemeral=True)
 
 
     @app_commands.command(name='getthumbnail', description='Get the HD thumbnail of a YouTube video.')
