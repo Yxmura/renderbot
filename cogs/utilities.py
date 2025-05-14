@@ -2,7 +2,7 @@ import discord
 from discord import app_commands, Embed, Color, ui
 from discord.ext import commands, tasks # Import tasks
 import json
-import datatime
+from datetime import datetime
 import os
 from typing import Optional, Dict, List, Any
 from dotenv import load_dotenv
