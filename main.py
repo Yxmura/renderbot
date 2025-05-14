@@ -23,6 +23,7 @@ GUILD_ID = config["guild_id"]
 CATEGORY_ID = config["category_id"]
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+tree = app_commands.CommandTree(client)
 
 @bot.event
 async def on_ready():
