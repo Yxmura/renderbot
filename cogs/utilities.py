@@ -1046,12 +1046,12 @@ class MusicCopyrightCog(commands.Cog):
         # Replace with actual creator/credits if needed
         embed.add_field(
             name="Creator",
-            value="Coder-Soft",
+            value="Yamura",
             inline=True
         )
         embed.add_field(
-            name="Credits",
-            value="Skeptical",
+            name="Co-creator",
+            value="Coder-Soft",
             inline=True
         )
         # Commands are now listed in the /help command
