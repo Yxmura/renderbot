@@ -4,12 +4,15 @@ from discord.ext import commands, tasks
 from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
-from cogs.utilities import Utilities, MusicCopyrightCog
+# Import Utilities and MusicCopyrightCog separately now
+from cogs.utilities import Utilities
+from cogs.music_copyright import MusicCopyrightCog
 from cogs.giveaway import GiveawayCog
 from cogs.welcomer import WelcomeGoodbyeCog
 from keep_alive import keep_alive
 from dotenv import load_dotenv
 import os
+import asyncio # Import asyncio at the top
 
 #This will get everything from the config.json file
 with open("config.json", mode="r") as config_file:
@@ -51,14 +54,15 @@ async def load_cogs():
         print('Loaded Welcomer')
         await bot.add_cog(GiveawayCog(bot))
         print('Loaded Giveaway')
-        # Load Utilities, which now contains both Utilities and MusicCopyrightCogs
-        await bot.add_cog(Utilities(bot))
-        print('Loaded Utilities')
         await bot.add_cog(MusicCopyrightCog(bot))
         print('Loaded Music Copyright')
-        print("Cogs loaded.")
+        await bot.add_cog(Utilities(bot))
+        print('Loaded Utilities')
+
+        print("Cogs loaded successfully.") # Indicate all add_cog calls are made
     except Exception as e:
-        print(f"Error loading cogs: {e}")
+        print(f"Error during cog loading setup: {e}")
+        # Consider adding more specific error handling or logging here
 
 
 def main():
@@ -66,18 +70,19 @@ def main():
     keep_alive()
     print("keep_alive() done.")
     try:
-        print("Starting bot...")
+        print("Starting bot event loop...")
         asyncio.run(run_bot())
     except discord.errors.LoginFailure:
         print("Error: Invalid Discord token. Please check your .env file.")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error during bot runtime: {e}")
 
 async def run_bot():
     await load_cogs()
+    # bot.start is a blocking call that runs the event loop
     await bot.start(BOT_TOKEN)
 
 
 if __name__ == "__main__":
-    import asyncio
+    # Removed redundant asyncio import here as it's imported at the top
     main()
