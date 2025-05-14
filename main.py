@@ -5,7 +5,8 @@ from discord.ext import commands, tasks
 from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
-from cogs.utilities import Utilities, MusicCopyrightCog
+from cogs.utilities import Utilities
+from cogs.music_copyright import MusicCopyrightCog
 from cogs.giveaway import GiveawayCog
 from cogs.welcomer import WelcomeGoodbyeCog
 from keep_alive import keep_alive
