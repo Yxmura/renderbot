@@ -21,11 +21,9 @@ load_dotenv()
 BOT_TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD_ID = config["guild_id"]
 CATEGORY_ID = config["category_id"]
+ROLE_ID = 1317607057687576696
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-intents = discord.Intents.default()
-client = discord.Client(intents=intents)
-tree = app_commands.CommandTree(client)
 
 @bot.event
 async def on_ready():
@@ -33,13 +31,14 @@ async def on_ready():
     await bot.tree.sync()
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='you | /help'))
 
-@tree.command(name='sync', description='Owner only')
+@bot.tree.command(name='sync', description='Sync application commands (requires role)')
 async def sync(interaction: discord.Interaction):
-    if interaction.user.id == 1317607057687576696:
-        await tree.sync()
+    if any(role.id == ROLE_ID for role in interaction.user.roles):
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        await interaction.response.send_message("✅ Synced commands to this guild!", ephemeral=True)
         print('Command tree synced.')
     else:
-        await interaction.response.send_message('You must be the owner to use this command!')
+        await interaction.response.send_message('❌ You do not have permission to use this command.', ephemeral=True)
 
 def main():
     print('starting keepalive')
