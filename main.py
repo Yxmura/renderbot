@@ -27,25 +27,15 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
-    
-    await bot.add_cog(Ticket_System(bot))
-    print('loaded ticket system')
-    await bot.add_cog(Ticket_Command(bot))
-    print('loaded ticket command')
-    await bot.add_cog(FunCommands(bot))
-    print('loaded funcommands')
-    await bot.add_cog(GiveawayCog(bot))
-    print('loaded giveawaycog')
-    await bot.add_cog(MusicCopyrightCog(bot))
-    print('loaded music copyright')
-    await bot.add_cog(PollCog(bot))
-    print('loaded pollcog')
-    await bot.add_cog(WelcomeGoodbyeCog(bot))
-    print('loaded welcoming cog')
-    await bot.add_cog(Utilities(bot))
-    print('loaded utils')
-    print('done loading cogs 🎉, starting richpresence')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='you | /help'))
+
+@tree.command(name='sync', description='Owner only')
+async def sync(interaction: discord.Interaction):
+    if interaction.user.id == 1317607057687576696:
+        await tree.sync()
+        print('Command tree synced.')
+    else:
+        await interaction.response.send_message('You must be the owner to use this command!')
 
 def main():
     print('starting keepalive')
