@@ -27,6 +27,7 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
+    await bot.tree.sync()
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='you | /help'))
 
 @tree.command(name='sync', description='Owner only')
