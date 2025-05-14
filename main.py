@@ -25,9 +25,24 @@ ROLE_ID = 1317607057687576696
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
+async def load_cogs():
+    await bot.add_cog(Ticket_System(bot))
+    await bot.add_cog(Ticket_Command(bot))
+    await bot.add_cog(FunCommands(bot))
+    await bot.add_cog(Utilities(bot))
+    await bot.add_cog(MusicCopyrightCog(bot))
+    await bot.add_cog(GiveawayCog(bot))
+    await bot.add_cog(WelcomeGoodbyeCog(bot))
+    await bot.add_cog(PollCog(bot))
+
+async def start_bot():
+    await load_cogs()
+    await bot.start(BOT_TOKEN)
+
 @bot.event
 async def on_ready():
     print(f'Bot Started | {bot.user.name}')
+    await load_cogs()
     await bot.tree.sync()
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='you | /help'))
 
@@ -44,14 +59,12 @@ async def sync_command(ctx):
 
 
 def main():
-    print('starting keepalive')
     keep_alive()
-    print('finished keepalive')
     try:
-        print("Starting bot...")
-        bot.run(BOT_TOKEN)
+        import asyncio
+        asyncio.run(start_bot())
     except discord.errors.LoginFailure:
-        print("Error: Invalid Discord token. Please check your .env file.")
+        print("Error: Invalid Discord token.")
     except Exception as e:
         print(f"Unexpected error: {e}")
 
