@@ -5,6 +5,9 @@ from discord.ext import commands, tasks
 from cogs.ticket_system import Ticket_System
 from cogs.ticket_commands import Ticket_Command
 from cogs.fun import FunCommands
+from cogs.utilities import Utilities, MusicCopyrightCog
+from cogs.giveaway import GiveawayCog
+from cogs.welcomer import WelcomeGoodbyeCog
 from keep_alive import keep_alive
 from dotenv import load_dotenv
 import os
@@ -17,7 +20,7 @@ BOT_TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD_ID = config["guild_id"]
 CATEGORY_ID = config["category_id"]
 
-bot = commands.Bot(intents=discord.Intents.all())
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 @bot.event
 async def on_ready():
