@@ -1,8 +1,7 @@
 import discord
 from discord import app_commands, Embed, Color, ui
-from discord.ext import commands, tasks # Import tasks
+from discord.ext import commands, tasks
 import json
-from datetime import datetime
 import os
 from typing import Optional, Dict, List, Any
 from dotenv import load_dotenv
@@ -12,18 +11,32 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from googleapiclient.discovery import build
 import re
+from datetime import datetime
 
+# Load environment variables
 load_dotenv()
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
-youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+# Initialize YouTube API client
+if YOUTUBE_API_KEY:
+    try:
+        youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+    except Exception as e:
+        print(f"Error initializing YouTube API client: {e}")
+        youtube_client = None
+else:
+    print("YOUTUBE_API_KEY not found in environment variables. YouTube commands will not work.")
+    youtube_client = None
+
 
 # Regex pattern for YouTube URLs
 YOUTUBE_URL_PATTERN = r'(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})'
 
-REQUIRED_ROLE_ID= 1317607057687576696
+# This should ideally be loaded from a config file or database on startup
+# For simplicity in this example, we'll use a global variable for now
+REQUIRED_ROLE_ID: Optional[int] = 1317607057687576696 # Keeping the original value
 
 # View for pagination
 class HelpPaginatorView(ui.View):
@@ -101,7 +114,18 @@ class Utilities(commands.Cog):
                     config_data = json.load(f)
                     # Only update if the key exists in the config file
                     if 'required_role_id' in config_data:
-                         REQUIRED_ROLE_ID = config_data.get("required_role_id")
+                         # Attempt to cast to int, handle potential errors
+                         try:
+                             loaded_role_id = config_data.get("required_role_id")
+                             if loaded_role_id is not None:
+                                 REQUIRED_ROLE_ID = int(loaded_role_id)
+                             else:
+                                 REQUIRED_ROLE_ID = None # Explicitly set to None if the value is None
+                         except (ValueError, TypeError):
+                             print("Invalid value for required_role_id in config. Using default.")
+                             REQUIRED_ROLE_ID = 1317607057687576696 # Reset to default if invalid
+
+
                 except json.JSONDecodeError:
                      print("Error loading utilities_config.json. Using default value for REQUIRED_ROLE_ID.")
         else:
@@ -121,7 +145,8 @@ class Utilities(commands.Cog):
         print("UtilitiesCog ready.")
         # Categorize commands when the bot is ready
         # Delay categorization slightly to ensure other cogs are loaded
-        await asyncio.sleep(2) # Adjust delay if needed
+        # Increased delay as command fetching might take a bit after sync
+        await asyncio.sleep(5)
         await self.categorize_commands()
 
 
@@ -130,34 +155,58 @@ class Utilities(commands.Cog):
         await self.bot.wait_until_ready() # Ensure bot is ready and commands are synced
         self.categorized_commands.clear() # Clear previous categorization
 
-        # Get global commands
-        global_commands = await self.bot.tree.fetch_commands()
+        print("Fetching commands for categorization...")
+        try:
+            # Fetch global commands
+            global_commands = await self.bot.tree.fetch_commands(guild=None)
+            print(f"Fetched {len(global_commands)} global commands.")
 
-        for command in global_commands:
-            cog_name = "No Cog" # Default category
-            # Find the cog instance the command belongs to
-            if command.binding is not None:
+            # Fetch guild commands for the primary guild if available
+            guild_commands = []
+            if self.bot.guilds:
                  try:
-                     cog_instance = self.bot.get_cog(command.binding.qualified_name)
-                     if cog_instance:
-                         cog_name = type(cog_instance).__name__
-                 except AttributeError:
-                     # Handle cases where binding might not have qualified_name
-                     pass
+                     guild_id_from_config = self.bot.guilds[0].id # Fallback to the first guild if GUILD_ID config is missing/invalid
+                     # If you have a GUILD_ID in config.json that you want to prioritize for guild commands:
+                     # if hasattr(self.bot, 'GUILD_ID') and self.bot.GUILD_ID:
+                     #    guild_id_from_config = self.bot.GUILD_ID
+
+                     guild_object_for_fetch = discord.Object(id=guild_id_from_config)
+                     guild_commands = await self.bot.tree.fetch_commands(guild=guild_object_for_fetch)
+                     print(f"Fetched {len(guild_commands)} guild commands for guild {guild_id_from_config}.")
                  except Exception as e:
-                     print(f"Error categorizing command {command.name}: {e}")
+                     print(f"Error fetching guild commands: {e}")
 
 
-            if cog_name not in self.categorized_commands:
-                self.categorized_commands[cog_name] = []
-            self.categorized_commands[cog_name].append(command)
+            all_commands = global_commands + guild_commands # Combine global and guild commands
 
-        # You might also want to add guild-specific commands if you have any
-        # for guild in self.bot.guilds: # Iterate through connected guilds
-        #     guild_commands = await self.bot.tree.fetch_commands(guild=guild)
-        #     for command in guild_commands:
-        #         # Categorize similarly, perhaps adding guild name to cog_name
-        #         pass
+            for command in all_commands:
+                cog_name = "No Cog" # Default category
+                # Find the cog instance the command belongs to
+                if command.binding is not None:
+                     try:
+                         # Get the cog name from the bound cog instance
+                         # command.binding is the cog instance itself when using bot.add_cog(Cog(bot))
+                         cog_instance = command.binding
+                         if cog_instance:
+                             cog_name = type(cog_instance).__name__
+                     except AttributeError:
+                         # Handle cases where binding might not be the cog instance
+                         pass
+                     except Exception as e:
+                         print(f"Error identifying cog for command {command.name}: {e}")
+
+
+                if cog_name not in self.categorized_commands:
+                    self.categorized_commands[cog_name] = []
+                self.categorized_commands[cog_name].append(command)
+
+            print("Commands categorized.")
+            # Print categorized commands for verification
+            for cog, cmds in self.categorized_commands.items():
+                 print(f"  {cog}: {[cmd.name for cmd in cmds]}")
+
+        except Exception as e:
+            print(f"Error during command categorization: {e}")
 
 
     @app_commands.command(name="ping", description="Check the bot's latency")
@@ -341,8 +390,14 @@ class MusicCopyrightCog(commands.Cog):
 
         # Initialize Spotify client credentials manager
         try:
-            self.spotify_client_credentials_manager = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
-            self.spotify = spotipy.Spotify(client_credentials_manager=self.spotify_client_credentials_manager)
+            # Check if keys are available before initializing
+            if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
+                self.spotify_client_credentials_manager = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
+                self.spotify = spotipy.Spotify(client_credentials_manager=self.spotify_client_credentials_manager)
+            else:
+                 print("Spotify client ID or secret not found in environment variables. Spotify commands will not work.")
+                 self.spotify = None
+
         except Exception as e:
              print(f"Error initializing Spotify client: {e}")
              self.spotify = None
@@ -384,8 +439,6 @@ class MusicCopyrightCog(commands.Cog):
          # Save the cache when the cog is unloaded
          self.save_cache()
 
-
-    # Make commands slash commands where appropriate
 
     @app_commands.command(name='checkcopyright', description='Check copyright status of a song by title or YouTube URL')
     @app_commands.describe(query="Song title or YouTube URL")
@@ -510,7 +563,7 @@ class MusicCopyrightCog(commands.Cog):
                 return {
                     'title': track['name'],
                     'artist': ", ".join(artist['name'] for artist in track['artists']),
-                    'album': track['album']['name'],
+                    'album': track['album'].get('name', 'Unknown Album'), # Use .get for safety
                     'release_date': track['album'].get('release_date', 'Unknown'),
                     'spotify_url': track['external_urls']['spotify'],
                     'thumbnail': track['album']['images'][0]['url'] if track['album']['images'] else None,
@@ -569,17 +622,18 @@ class MusicCopyrightCog(commands.Cog):
         embed.set_footer(text="Learn About Copyright, types, symbols, and much more. Visit Gappa Wiki Now!")
 
         view = ui.View()
-        button = ui.Button(style=discord.ButtonStyle.link, label="Learn About Copyright", url="https://gappa-web.pages.dev/wiki/wiki")
-        view.add_item(button)
+        learn_copyright_button = ui.Button(style=discord.ButtonStyle.link, label="Learn About Copyright", url="https://gappa-web.pages.dev/wiki/wiki")
+        view.add_item(learn_copyright_button)
 
-        # Add a button to fetch detailed video info if YouTube client is available
+        # Add a button to fetch detailed video info if YouTube client is available and we have a valid URL
         if youtube_client and info.get('url'):
             match = re.search(YOUTUBE_URL_PATTERN, info['url'])
             if match:
                 video_id = match.group(1)
                 # Using a dynamic custom_id for potential persistence (though less critical here)
                 fetch_details_button = ui.Button(label="Fetch Detailed Info", style=discord.ButtonStyle.primary, custom_id=f"fetch_youtube_{video_id}")
-                fetch_details_button.callback = self.fetch_details_button_callback # Assign the new callback
+                # Pass the cog instance to the callback if it needs access to cog state
+                fetch_details_button.callback = lambda i: self.fetch_details_button_callback(i, video_id) # Pass video_id to callback
                 view.add_item(fetch_details_button)
 
 
@@ -588,22 +642,14 @@ class MusicCopyrightCog(commands.Cog):
 
         return embed, view
 
-    async def fetch_details_button_callback(self, interaction: discord.Interaction):
+    async def fetch_details_button_callback(self, interaction: discord.Interaction, video_id: str):
         await interaction.response.defer(ephemeral=True) # Defer ephemerally
 
-        custom_id_parts = interaction.data.get('custom_id', '').split('_')
-        if len(custom_id_parts) != 3 or custom_id_parts[0] != 'fetch' or custom_id_parts[1] != 'youtube':
-            await interaction.followup.send("Invalid button callback.", ephemeral=True)
-            return
-
-        video_id = custom_id_parts[2]
         video_url = f"https://www.youtube.com/watch?v={video_id}"
 
-
         try:
-            video_info = self.get_video_info(video_url) # This is a blocking call, ensure get_video_info is safe or make it async
-            # If get_video_info uses blocking YouTube API calls, it should be awaited like:
-            # video_info = await asyncio.get_event_loop().run_in_executor(None, lambda: self.get_video_info_blocking(video_url))
+            # Use run_in_executor for the blocking call
+            video_info = await asyncio.get_event_loop().run_in_executor(None, lambda: self.get_video_info_blocking(video_url))
 
 
             embed = Embed(
@@ -615,9 +661,9 @@ class MusicCopyrightCog(commands.Cog):
             embed.set_author(name=video_info['channel_title'])
             # Format date for better readability
             try:
-                publish_date = datetime.fromisoformat(video_info['publish_date'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
+                publish_date = datetime.fromisoformat(video_info.get('publish_date', '').replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
             except ValueError:
-                 publish_date = video_info['publish_date'] # Use raw if parsing fails
+                 publish_date = video_info.get('publish_date', 'Unknown Date') # Use raw or default if parsing fails
 
             embed.add_field(name="Published on", value=publish_date, inline=True)
             embed.add_field(name="Views", value=f"{int(video_info.get('views', 0)):,}", inline=True)
@@ -631,26 +677,31 @@ class MusicCopyrightCog(commands.Cog):
                 embed.set_thumbnail(url=video_info['thumbnail'])
 
             # Add button to get channel stats if channel ID is available
+            view = ui.View() # Create a new view for these buttons
             if youtube_client and video_info.get('channel_id'):
                 channel_id = video_info['channel_id']
                 get_stats_button = ui.Button(label="Get Channel Stats", style=discord.ButtonStyle.primary, custom_id=f"get_channel_stats_{channel_id}")
-                get_stats_button.callback = self.get_channel_stats_button_callback
-                view = ui.View() # Create a new view for these buttons
+                # Pass the cog instance and channel_id to the callback
+                get_stats_button.callback = lambda i: self.get_channel_stats_button_callback(i, channel_id)
                 view.add_item(get_stats_button)
-                await interaction.followup.send(embed=embed, view=view, ephemeral=False) # Send non-ephemeral
-            else:
-                await interaction.followup.send(embed=embed, ephemeral=False) # Send non-ephemeral
+
+            # Add a button to learn about copyright
+            learn_copyright_button = ui.Button(style=discord.ButtonStyle.link, label="Learn About Copyright", url="https://gappa-web.pages.dev/wiki/wiki")
+            view.add_item(learn_copyright_button)
+
+
+            await interaction.followup.send(embed=embed, view=view, ephemeral=False) # Send non-ephemeral
 
 
         except Exception as e:
             error_message = f"An error occurred while fetching detailed info: {str(e)}"
             if "quota" in str(e).lower():
                  error_message = "YouTube API quota exceeded. Please try again later."
+            print(f"Error in fetch_details_button_callback: {e}") # Log the error
             await interaction.followup.send(error_message, ephemeral=True)
 
 
-    # Ensure this is compatible with async (using run_in_executor for blocking parts)
-    def get_video_info(self, video_url: str) -> Dict[str, Any]:
+        def get_video_info_blocking(self, video_url: str) -> Dict[str, Any]:
         if not youtube_client:
              raise Exception("YouTube API client is not initialized.")
 
@@ -681,18 +732,18 @@ class MusicCopyrightCog(commands.Cog):
         channel_response = channel_request.execute()
 
         channel_data = channel_response["items"][0]
-        thumbnail = video_data["snippet"]["thumbnails"]["high"]["url"] if "thumbnails" in video_data["snippet"] and "high" in video_data["snippet"]["thumbnails"] else None
+        thumbnail = video_data["snippet"].get("thumbnails", {}).get("high", {}).get("url") # Use .get for safety
 
         return {
-            "title": video_data["snippet"]["title"],
+            "title": video_data["snippet"].get("title", "Unknown Title"),
             "description": video_data["snippet"].get("description", "No description provided."),
-            "channel_title": video_data["snippet"]["channelTitle"],
+            "channel_title": video_data["snippet"].get("channelTitle", "Unknown Channel"),
             "channel_id": channel_id, # Include channel ID
-            "publish_date": video_data["snippet"]["publishedAt"],
+            "publish_date": video_data["snippet"].get("publishedAt", "Unknown Date"),
             "views": video_data["statistics"].get("viewCount", "0"),
             "likes": video_data["statistics"].get("likeCount", "0"),
             "comments": video_data["statistics"].get("commentCount", "0"),
-            "duration": video_data["contentDetails"]["duration"],
+            "duration": video_data["contentDetails"].get("duration", "PT0S"), # Default to PT0S if missing
             "channel_subscribers": channel_data["statistics"].get("subscriberCount", "0"),
             "channel_videos": channel_data["statistics"].get("videoCount", "0"),
             "thumbnail": thumbnail
@@ -717,7 +768,8 @@ class MusicCopyrightCog(commands.Cog):
             minutes = int(minutes_str)
         if 'S' in duration:
             seconds_str = duration.replace('S', '')
-            seconds = int(seconds_str)
+            # Handle potential floating point seconds if API returns them
+            seconds = int(float(seconds_str))
 
         parts = []
         if hours > 0:
@@ -725,7 +777,15 @@ class MusicCopyrightCog(commands.Cog):
         parts.append(f"{minutes:02d}")
         parts.append(f"{seconds:02d}")
 
-        return ":".join(parts)
+        # Ensure at least minutes:seconds format
+        if len(parts) == 1: # Only seconds
+             return f"00:{parts[0]}"
+        elif len(parts) == 2: # Minutes and seconds
+             return ":".join(parts)
+        elif len(parts) == 3: # Hours, minutes, seconds
+             return ":".join(parts)
+        else:
+             return duration # Fallback if unexpected parsing issue
 
 
     @app_commands.command(name='youtubestats', description='Get detailed statistics for a YouTube channel.')
@@ -737,8 +797,8 @@ class MusicCopyrightCog(commands.Cog):
              await interaction.followup.send("YouTube API client is not initialized. Please check the bot's configuration.")
              return
 
-
         try:
+            # Use run_in_executor for the blocking calls
             stats = await asyncio.get_event_loop().run_in_executor(None, lambda: self.get_channel_details_blocking(channel_id))
             latest_video = await asyncio.get_event_loop().run_in_executor(None, lambda: self.get_latest_video_blocking(channel_id))
             top_video = await asyncio.get_event_loop().run_in_executor(None, lambda: self.get_top_video_blocking(channel_id))
@@ -753,13 +813,25 @@ class MusicCopyrightCog(commands.Cog):
                     embed.set_thumbnail(url=stats["profile_pic"])
                 if stats["banner_url"]:
                     embed.set_image(url=stats["banner_url"])
-                # Format numbers with commas
+
                 embed.add_field(name="Subscribers", value=f"{int(stats.get('subscribers', 0)):,}", inline=True)
                 embed.add_field(name="Total Views", value=f"{int(stats.get('views', 0)):,}", inline=True)
                 embed.add_field(name="Total Videos", value=f"{int(stats.get('videos', 0)):,}", inline=True)
-                # Estimated watch hours calculation should be more robust if needed
-                # embed.add_field(name="Watch Hours (estimated)", value=stats['watch_hours'], inline=True)
-                embed.add_field(name="Channel Created", value=stats['created_at'], inline=True)
+                # Add a basic estimate for watch hours based on total views and average duration (if available)
+                # This is still a very rough estimate.
+                # if stats.get('views') and stats.get('videos'):
+                #      try:
+                #          avg_views_per_video = int(stats['views']) / int(stats['videos']) if int(stats['videos']) > 0 else 0
+                #          # Assuming average video duration is around 5-10 minutes (300-600 seconds) as a heuristic
+                #          # A better approach would involve fetching actual video durations
+                #          estimated_watch_time_seconds_per_view = 450 # Rough estimate
+                #          estimated_total_watch_hours = (int(stats['views']) * estimated_watch_time_seconds_per_view) / 3600
+                #          embed.add_field(name="Est. Watch Hours", value=f"{int(estimated_total_watch_hours):,}", inline=True)
+                #      except Exception as e:
+                #          print(f"Error calculating estimated watch hours: {e}")
+
+
+                embed.add_field(name="Channel Created", value=stats.get('created_at', 'Unknown'), inline=True) # Keep raw if formatting is complex
 
                 if latest_video:
                     embed.add_field(
@@ -773,7 +845,14 @@ class MusicCopyrightCog(commands.Cog):
                         value=f"[{top_video['title']}](https://www.youtube.com/watch?v={top_video['video_id']})",
                         inline=False
                     )
-                await interaction.followup.send(embed=embed)
+
+                # Add a button to learn about copyright
+                view = ui.View()
+                learn_copyright_button = ui.Button(style=discord.ButtonStyle.link, label="Learn About Copyright", url="https://gappa-web.pages.dev/wiki/wiki")
+                view.add_item(learn_copyright_button)
+
+                await interaction.followup.send(embed=embed, view=view)
+
             else:
                 await interaction.followup.send("Channel not found for the provided ID!")
 
@@ -781,82 +860,92 @@ class MusicCopyrightCog(commands.Cog):
             error_message = f"An error occurred: {str(e)}"
             if "quota" in str(e).lower():
                 error_message = "YouTube API quota exceeded. Please try again later."
+            print(f"Error in youtube_stats: {e}") # Log the error
             await interaction.followup.send(error_message)
 
     # These helper methods were blocking and need to be called within run_in_executor
     def get_channel_details_blocking(self, channel_id: str) -> Optional[Dict[str, Any]]:
         if not youtube_client: return None
-        request = youtube_client.channels().list(
-            part="snippet,statistics,brandingSettings,contentDetails",
-            id=channel_id
-        )
-        response = request.execute()
-        if "items" in response and len(response["items"]) > 0:
-            channel = response["items"][0]
-            statistics = channel.get("statistics", {})
-            snippet = channel.get("snippet", {})
-            branding = channel.get("brandingSettings", {})
-            image_branding = branding.get("image", {})
+        try:
+            request = youtube_client.channels().list(
+                part="snippet,statistics,brandingSettings,contentDetails",
+                id=channel_id
+            )
+            response = request.execute()
+            if "items" in response and len(response["items"]) > 0:
+                channel = response["items"][0]
+                statistics = channel.get("statistics", {})
+                snippet = channel.get("snippet", {})
+                branding = channel.get("brandingSettings", {})
+                image_branding = branding.get("image", {})
 
-            return {
-                "title": snippet.get("title", "Unknown"),
-                "description": snippet.get("description", "No description"),
-                "subscribers": statistics.get("subscriberCount", "0"),
-                "views": statistics.get("viewCount", "0"),
-                "videos": statistics.get("videoCount", "0"),
-                "created_at": snippet.get("publishedAt", "Unknown"),
-                "profile_pic": snippet.get("thumbnails", {}).get("high", {}).get("url"),
-                "banner_url": image_branding.get("bannerExternalUrl"),
-            }
-        else:
-            return None
+                return {
+                    "title": snippet.get("title", "Unknown"),
+                    "description": snippet.get("description", "No description"),
+                    "subscribers": statistics.get("subscriberCount", "0"),
+                    "views": statistics.get("viewCount", "0"),
+                    "videos": statistics.get("videoCount", "0"),
+                    "created_at": snippet.get("publishedAt", "Unknown"),
+                    "profile_pic": snippet.get("thumbnails", {}).get("high", {}).get("url"),
+                    "banner_url": image_branding.get("bannerExternalUrl"),
+                }
+            else:
+                return None
+        except Exception as e:
+             print(f"Error fetching channel details (blocking): {e}")
+             return None
 
     def get_latest_video_blocking(self, channel_id: str) -> Optional[Dict[str, Any]]:
         if not youtube_client: return None
-        request = youtube_client.search().list(
-            part="snippet",
-            channelId=channel_id,
-            order="date",
-            maxResults=1,
-            type="video" # Specify type as video
-        )
-        response = request.execute()
+        try:
+            request = youtube_client.search().list(
+                part="snippet",
+                channelId=channel_id,
+                order="date",
+                maxResults=1,
+                type="video" # Specify type as video
+            )
+            response = request.execute()
 
-        if response["items"]:
-            video = response["items"][0]
-            if video["id"]["kind"] == "youtube#video": # Ensure it's a video
-                return {
-                    "title": video["snippet"]["title"],
-                    "video_id": video["id"]["videoId"],
-                    "published_at": video["snippet"]["publishedAt"]
-                }
-        return None
+            if response["items"]:
+                video = response["items"][0]
+                if video["id"]["kind"] == "youtube#video": # Ensure it's a video
+                    return {
+                        "title": video["snippet"]["title"],
+                        "video_id": video["id"]["videoId"],
+                        "published_at": video["snippet"].get("publishedAt", "Unknown Date")
+                    }
+            return None
+        except Exception as e:
+             print(f"Error fetching latest video (blocking): {e}")
+             return None
+
 
     def get_top_video_blocking(self, channel_id: str) -> Optional[Dict[str, Any]]:
         if not youtube_client: return None
-        # The YouTube Data API does not have a direct "order by viewCount" for search results
-        # You would typically fetch videos and then sort by viewCount if needed
-        # Or fetch from playlists like "Popular uploads" if available
-        # For simplicity, keeping the search by viewCount as it was, but noting it's an estimate.
-        # A more accurate way might involve fetching actual video details after a general search.
+        try:
+            # The YouTube Data API does not have a direct "order by viewCount" for search results
+            # This search order is approximate and might not find the absolute top video.
+            request = youtube_client.search().list(
+                part="snippet",
+                channelId=channel_id,
+                order="viewCount", # This might not work as expected for general search
+                maxResults=1,
+                type="video"
+            )
+            response = request.execute()
 
-        request = youtube_client.search().list(
-            part="snippet",
-            channelId=channel_id,
-            order="viewCount", # This might not work as expected for general search
-            maxResults=1,
-            type="video"
-        )
-        response = request.execute()
-
-        if response["items"]:
-             video = response["items"][0]
-             if video["id"]["kind"] == "youtube#video":
-                 return {
-                     "title": video["snippet"]["title"],
-                     "video_id": video["id"]["videoId"]
-                 }
-        return None
+            if response["items"]:
+                 video = response["items"][0]
+                 if video["id"]["kind"] == "youtube#video":
+                     return {
+                         "title": video["snippet"].get("title", "Unknown Title"),
+                         "video_id": video["id"]["videoId"]
+                     }
+            return None
+        except Exception as e:
+             print(f"Error fetching top video (blocking): {e}")
+             return None
 
 
     @app_commands.command(name='getchannelid', description='Fetches the YouTube channel ID from a given handle or search.')
@@ -876,9 +965,10 @@ class MusicCopyrightCog(commands.Cog):
             handle = query.lstrip('@')
 
             # First, try to fetch by handle (more reliable if it's an exact handle)
+            # Note: forHandle is the correct parameter for modern handles
             request_handle = youtube_client.channels().list(
                 part="id,snippet",
-                forHandle=handle # Use forHandle for modern handles
+                forHandle=handle
             )
             response_handle = await asyncio.get_event_loop().run_in_executor(None, request_handle.execute)
 
@@ -896,8 +986,8 @@ class MusicCopyrightCog(commands.Cog):
                 search_response = await asyncio.get_event_loop().run_in_executor(None, search_request.execute)
 
                 if search_response.get("items"):
-                    channel_id = search_response["items"][0]["id"]["channelId"]
-                    channel_name = search_response["items"][0]["snippet"]["title"]
+                    channel_id = search_response["items"][0]["id"].get("channelId")
+                    channel_name = search_response["items"][0]["snippet"].get("title")
                 else:
                      error_message = f"No channel found for `{query}`."
 
@@ -920,7 +1010,8 @@ class MusicCopyrightCog(commands.Cog):
             view = ui.View()
             # Create a button to get channel stats
             get_stats_button = ui.Button(style=discord.ButtonStyle.green, label="Get Channel Stats", custom_id=f"get_channel_stats_{channel_id}")
-            get_stats_button.callback = self.get_channel_stats_button_callback # Assign the callback
+            # Pass the cog instance and channel_id to the callback
+            get_stats_button.callback = lambda i: self.get_channel_stats_button_callback(i, channel_id)
             view.add_item(get_stats_button)
 
             # Add a button to learn about copyright
@@ -932,15 +1023,8 @@ class MusicCopyrightCog(commands.Cog):
             await interaction.followup.send(error_message or "Could not fetch channel information.")
 
 
-    async def get_channel_stats_button_callback(self, interaction: discord.Interaction):
+    async def get_channel_stats_button_callback(self, interaction: discord.Interaction, channel_id: str):
         await interaction.response.defer(ephemeral=True) # Defer ephemerally
-
-        custom_id_parts = interaction.data.get('custom_id', '').split('_')
-        if len(custom_id_parts) != 4 or custom_id_parts[0] != 'get' or custom_id_parts[1] != 'channel' or custom_id_parts[2] != 'stats':
-            await interaction.followup.send("Invalid button callback.", ephemeral=True)
-            return
-
-        channel_id = custom_id_parts[3]
 
         if not youtube_client:
              await interaction.followup.send("YouTube API client is not initialized. Please check the bot's configuration.")
@@ -954,34 +1038,39 @@ class MusicCopyrightCog(commands.Cog):
 
             if stats:
                 embed = Embed(
-                    title=f"{stats['title']} - YouTube Channel Stats",
-                    description=stats['description'],
+                    title=f"{stats.get('title', 'Unknown')} - YouTube Channel Stats",
+                    description=stats.get('description', 'No description'),
                     color=Color.red()
                 )
-                if stats["profile_pic"]:
+                if stats.get("profile_pic"):
                     embed.set_thumbnail(url=stats["profile_pic"])
-                if stats["banner_url"]:
+                if stats.get("banner_url"):
                     embed.set_image(url=stats["banner_url"])
 
                 embed.add_field(name="Subscribers", value=f"{int(stats.get('subscribers', 0)):,}", inline=True)
                 embed.add_field(name="Total Views", value=f"{int(stats.get('views', 0)):,}", inline=True)
                 embed.add_field(name="Total Videos", value=f"{int(stats.get('videos', 0)):,}", inline=True)
-                embed.add_field(name="Channel Created", value=stats.get('created_at', 'Unknown'), inline=True) # Keep raw if formatting is complex
+                embed.add_field(name="Channel Created", value=stats.get('created_at', 'Unknown'), inline=True)
 
                 if latest_video:
                     embed.add_field(
                         name="Latest Video",
-                        value=f"[{latest_video['title']}](https://www.youtube.com/watch?v={latest_video['video_id']})",
+                        value=f"[{latest_video.get('title', 'Unknown Title')}](https://www.youtube.com/watch?v={latest_video.get('video_id', '')})" if latest_video.get('video_id') else latest_video.get('title', 'Unknown Title'),
                         inline=False
                     )
                 if top_video:
                     embed.add_field(
                         name="Top Video",
-                        value=f"[{top_video['title']}](https://www.youtube.com/watch?v={top_video['video_id']})",
+                        value=f"[{top_video.get('title', 'Unknown Title')}](https://www.youtube.com/watch?v={top_video.get('video_id', '')})" if top_video.get('video_id') else top_video.get('title', 'Unknown Title'),
                         inline=False
                     )
 
-                await interaction.followup.send(embed=embed, ephemeral=False) # Send non-ephemeral
+                # Add a button to learn about copyright
+                view = ui.View()
+                learn_copyright_button = ui.Button(style=discord.ButtonStyle.link, label="Learn About Copyright", url="https://gappa-web.pages.dev/wiki/wiki")
+                view.add_item(learn_copyright_button)
+
+                await interaction.followup.send(embed=embed, view=view, ephemeral=False) # Send non-ephemeral
 
             else:
                 await interaction.followup.send("Channel statistics not found for the provided ID.", ephemeral=True)
@@ -990,7 +1079,8 @@ class MusicCopyrightCog(commands.Cog):
             error_message = f"An error occurred while fetching channel stats: {str(e)}"
             if "quota" in str(e).lower():
                  error_message = "YouTube API quota exceeded. Please try again later."
-            await interaction.followup.send(error_message, ephemeral=True)
+            print(f"Error in get_channel_stats_button_callback: {e}") # Log the error
+            await interaction.followup.send(error_message, ephemeral=true)
 
 
     @app_commands.command(name='getthumbnail', description='Get the HD thumbnail of a YouTube video.')
@@ -1024,14 +1114,7 @@ class MusicCopyrightCog(commands.Cog):
             description="I'm a bot designed to help The Creator Community With Free Tools! FREE FOR ALL!",
             color=Color.blue()
         )
-        # Get bot version (if you have one defined)
-        # try:
-        #     with open('version.txt', 'r') as f:
-        #         bot_version = f.read().strip()
-        # except FileNotFoundError:
-        #     bot_version = "Unknown"
         bot_version = "0.7" # Keeping your existing version number
-
 
         embed.add_field(
             name="Version",
@@ -1043,23 +1126,16 @@ class MusicCopyrightCog(commands.Cog):
             value=f"discord.py {discord.__version__}",
             inline=True
         )
-        # Replace with actual creator/credits if needed
         embed.add_field(
             name="Creator",
-            value="Yamura",
-            inline=True
-        )
-        embed.add_field(
-            name="Co-creator",
             value="Coder-Soft",
             inline=True
         )
-        # Commands are now listed in the /help command
-        # embed.add_field(
-        #     name="Commands",
-        #     value="Use !help to see available commands", # Update if you remove the old prefix
-        #     inline=False
-        # )
+        embed.add_field(
+            name="Credits",
+            value="Skeptical",
+            inline=True
+        )
         embed.set_footer(text="Learn About Copyright, types, symbols, and much more. Click the Button Below To Start Learning!")
 
         view = ui.View()
@@ -1114,8 +1190,13 @@ class MusicCopyrightCog(commands.Cog):
                  return
 
             file_size = os.path.getsize(output_mp3_file)
-            if file_size > interaction.guild.filesize_limit: # Check against server's file size limit
-                 await interaction.followup.send(f"The extracted audio file is too large ({file_size / (1024*1024):.2f} MB). Discord file size limit is {interaction.guild.filesize_limit / (1024*1024):.2f} MB.")
+            # Check against server's file size limit
+            # If interaction.guild is None (e.g., DM), use a default limit
+            filesize_limit = interaction.guild.filesize_limit if interaction.guild else 8 * 1024 * 1024 # Default 8MB
+
+
+            if file_size > filesize_limit:
+                 await interaction.followup.send(f"The extracted audio file is too large ({file_size / (1024*1024):.2f} MB). Discord file size limit is {filesize_limit / (1024*1024):.2f} MB.")
                  os.remove(output_mp3_file) # Clean up
                  return
 
