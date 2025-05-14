@@ -9,6 +9,7 @@ from cogs.utilities import Utilities
 from cogs.music_copyright import MusicCopyrightCog
 from cogs.giveaway import GiveawayCog
 from cogs.welcomer import WelcomeGoodbyeCog
+from cogs.poll import PollCog
 from keep_alive import keep_alive
 from dotenv import load_dotenv
 import os
