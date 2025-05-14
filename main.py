@@ -31,14 +31,17 @@ async def on_ready():
     await bot.tree.sync()
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='you | /help'))
 
-@bot.tree.command(name='sync', description='Sync application commands (requires role)')
-async def sync(interaction: discord.Interaction):
-    if any(role.id == ROLE_ID for role in interaction.user.roles):
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        await interaction.response.send_message("✅ Synced commands to this guild!", ephemeral=True)
-        print('Command tree synced.')
+@bot.command(name="sync")
+async def sync_command(ctx):
+    ROLE_ID = 1317607057687576696
+
+    if any(role.id == ROLE_ID for role in ctx.author.roles):
+        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        await ctx.send(f"✅ Synced {len(synced)} command(s) to this guild.")
+        print("Command tree synced.")
     else:
-        await interaction.response.send_message('❌ You do not have permission to use this command.', ephemeral=True)
+        await ctx.send("❌ You do not have permission to use this command.")
+
 
 def main():
     print('starting keepalive')
