@@ -5,3 +5,6 @@ flask
 requests
 python-dotenv
 datetime
+yt-dlp
+spotipy
+googleapiclient
