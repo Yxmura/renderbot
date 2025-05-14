@@ -76,22 +76,32 @@ async def load_cogs():
 
 
 def main():
-    print("Calling keep_alive()...")
-    keep_alive()
-    print("keep_alive() done.")
     try:
-        print("Starting bot event loop...")
-        asyncio.run(run_bot())
+        # Print a very clear starting message
+        print("======= BOT STARTING =======")
+        # Load cogs before starting the web server to ensure they're loaded
+        print("Loading cogs before web server...")
+        asyncio.run(load_cogs())
+        print("Cogs loaded, now starting web server...")
+        
+        # Start the web server in a separate thread to avoid blocking
+        import threading
+        keep_alive_thread = threading.Thread(target=keep_alive)
+        keep_alive_thread.daemon = True
+        keep_alive_thread.start()
+        print("Web server started in background thread")
+        
+        print("Starting bot...")
+        # Start the bot
+        bot.run(BOT_TOKEN)
     except discord.errors.LoginFailure:
         print("Error: Invalid Discord token. Please check your .env file.")
     except Exception as e:
         print(f"Unexpected error during bot runtime: {e}")
+        import traceback
+        traceback.print_exc()  # Print full error traceback
 
-
-async def run_bot():
-    await load_cogs()
-    # bot.start is a blocking call that runs the event loop
-    await bot.start(BOT_TOKEN)
+# We no longer need run_bot() as we're using bot.run() directly
 
 
 if __name__ == "__main__":
